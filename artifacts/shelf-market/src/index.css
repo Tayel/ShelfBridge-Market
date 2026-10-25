@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;500;600&family=Aref+Ruqaa:wght@700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
@@ -434,6 +434,10 @@
 }
 
 .font-display { font-family: 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em; }
+.inraf-wordmark { display: inline-flex; flex-shrink: 0; align-items: baseline; direction: ltr; gap: 1px; padding: 0 4px 5px; text-decoration: none; }
+.inraf-latin { font-family: 'Bricolage Grotesque', sans-serif; font-size: 31px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
+.inraf-arabic { font-family: 'Aref Ruqaa', 'Traditional Arabic', serif; font-size: 39px; font-weight: 700; line-height: 1.1; color: hsl(var(--primary)); unicode-bidi: isolate; }
+.inraf-wordmark:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 5px; border-radius: 4px; }
 .iso-stage { perspective: 1400px; }
 .iso-plane { transform: rotateX(58deg) rotateZ(-45deg); transform-style: preserve-3d; }
 .brick { transition: transform .25s cubic-bezier(.2,.8,.2,1), background-color .2s; transform-style: preserve-3d; }

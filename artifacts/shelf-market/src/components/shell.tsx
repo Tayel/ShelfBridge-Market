@@ -11,15 +11,9 @@ const NAV = [
 
 export function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2" data-testid="link-home">
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-        <rect x="3" y="6" width="22" height="3" rx="1.5" fill="hsl(var(--primary))" />
-        <rect x="3" y="14" width="22" height="3" rx="1.5" fill="hsl(var(--secondary-foreground))" />
-        <rect x="3" y="22" width="22" height="3" rx="1.5" fill="#E9A23B" />
-        <rect x="7" y="1" width="5" height="5" rx="1" fill="hsl(var(--primary))" opacity=".5" />
-        <rect x="15" y="10" width="4" height="4" rx="1" fill="hsl(var(--secondary-foreground))" opacity=".5" />
-      </svg>
-      <span className="font-display text-xl font-bold">Shelf</span>
+    <Link href="/" className="inraf-wordmark" data-testid="link-home" aria-label="InRaf home">
+      <span className="inraf-latin" aria-hidden="true">In</span>
+      <span className="inraf-arabic" lang="ar" dir="rtl" aria-hidden="true">رف</span>
     </Link>
   );
 }
@@ -35,7 +29,7 @@ export function DemoBadge() {
 
 export function Shell({ children, title, back }: { children: ReactNode; title: string; back?: string }) {
   const [loc] = useLocation();
-  useEffect(() => { document.title = `${title} · Shelf (demo)`; }, [title]);
+  useEffect(() => { document.title = `${title} · InRaf (demo)`; }, [title]);
   return (
     <div className="min-h-[100dvh] bg-background">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/90 backdrop-blur">

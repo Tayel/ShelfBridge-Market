@@ -1,9 +1,13 @@
 ---
-name: Shelf marketplace direction
+name: InRaf marketplace direction
 description: User-defined purpose, interaction constraints, and initial demo scope.
 ---
 
 The product connects shop owners with people renting shelf space and sourcing products, including small-capital international retail participants. Token A represents rented shelf space; Token B represents a shelf with products.
+
+The company name is InRaf; its bilingual wordmark is Inرف with calligraphic Arabic lettering.
+
+**Why:** The user explicitly named the company and specified the English–Arabic logo.
 
 **Why:** The user wants direct collaboration between producers, retail participants, and existing shop owners.
 
