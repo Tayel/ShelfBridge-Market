@@ -1,0 +1,2 @@
+- [Product direction](product-direction.md) — Visual shelf marketplace, staged single-action journeys, and explicitly simulated first release.
+- [JSX instrumentation](jsx-instrumentation.md) — Explicit JSX generic arguments can break the preview instrumentation despite passing TypeScript.

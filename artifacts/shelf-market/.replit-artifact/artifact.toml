@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Shelf — A little space. More possibility."
+description = "A visual demo marketplace connecting local shop owners with shelf renters and product suppliers through step-by-step shop layouts, shelf tokens, and simulated stocking purchases."
+version = "1.0.0"
+id = "artifacts/shelf-market"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24559
+
+[services.development]
+run = "pnpm --filter @workspace/shelf-market run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/shelf-market", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/shelf-market/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24559"
+BASE_PATH = "/"
