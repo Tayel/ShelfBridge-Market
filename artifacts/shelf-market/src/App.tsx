@@ -11,6 +11,17 @@ import ShopDetail from '@/pages/shop-detail';
 import Stock from '@/pages/stock';
 import Dashboard from '@/pages/dashboard';
 import OwnerDashboard from '@/pages/owner-dashboard';
+import ShopSettings from '@/pages/shop-settings';
+import ContractPage from '@/pages/contract';
+import ShelfPage from '@/pages/shelf';
+import ProductForm from '@/pages/product-form';
+import Catalog from '@/pages/catalog';
+import Scan from '@/pages/scan';
+import { OrdersList, Receipt } from '@/pages/orders';
+import Admin from '@/pages/admin';
+import Notifications from '@/pages/notifications';
+import Guide from '@/pages/guide';
+import Support from '@/pages/support';
 import {
   Route,
   Switch,
@@ -33,6 +44,19 @@ function Router() {
         <Route path="/stock/:tokenId" component={Stock} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/owner-dashboard" component={OwnerDashboard} />
+        <Route path="/owner-dashboard/shops/:id" component={ShopSettings} />
+        <Route path="/contracts/:id" component={ContractPage} />
+        <Route path="/shelf/:tokenId" component={ShelfPage} />
+        <Route path="/shelf/:tokenId/new" component={ProductForm} />
+        <Route path="/products/:id/edit" component={ProductForm} />
+        <Route path="/catalog/:tokenId" component={Catalog} />
+        <Route path="/scan" component={Scan} />
+        <Route path="/orders" component={OrdersList} />
+        <Route path="/orders/:id" component={Receipt} />
+        <Route path="/admin" component={Admin} />
+        <Route path="/notifications" component={Notifications} />
+        <Route path="/guide" component={Guide} />
+        <Route path="/support" component={Support} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

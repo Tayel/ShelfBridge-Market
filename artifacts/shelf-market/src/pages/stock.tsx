@@ -1,23 +1,18 @@
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Clock, Hourglass, Minus, Plus, ShieldAlert, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, FileSignature, Minus, Plus, ShieldAlert, X } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton, Tile, StepDots } from "@/components/shell";
 import { ShelfArt } from "@/components/shelf-art";
-import { COUNTRIES, PRODUCTS, SHELF_CAPACITY, countryName } from "@/lib/data";
+import { ErrorNote } from "@/components/kit";
+import { COUNTRIES, PRODUCTS, countryName } from "@/lib/data";
 import { runChecks, firstBlocker } from "@/lib/checks";
-import { actions, productOf, useStore, usd } from "@/lib/store";
+import { useStore, usd } from "@/lib/store";
+import { actions } from "@/lib/actions";
+import { useAct } from "@/hooks/use-act";
+import { contractOfToken, contractStatus, shelfUnits } from "@/lib/selectors";
 
-function TokenChip({ kind }: { kind: "A" | "B" }) {
-  return (
-    <motion.div initial={{ rotateY: 90 }} animate={{ rotateY: 0 }} transition={{ duration: 0.6 }}
-      className={`mx-auto grid h-32 w-24 place-items-center rounded-2xl text-5xl font-extrabold font-display shadow-[0_20px_40px_-18px_rgba(120,60,30,.5)] ${kind === "A" ? "bg-primary text-primary-foreground" : "bg-secondary-foreground text-secondary"}`}
-      data-testid={`token-${kind}`}>
-      {kind}
-    </motion.div>
-  );
-}
-
+/** Guided "Token A → Token B" path using sample products. Creates a listing that the owner approves. */
 export default function Stock() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const st = useStore();
@@ -28,7 +23,7 @@ export default function Stock() {
   const [origin, setOrigin] = useState("");
   const [pid, setPid] = useState("");
   const [qty, setQty] = useState(12);
-  const fresh = typeof window !== "undefined" && window.location.search.includes("new=1");
+  const { act, error, pending } = useAct();
 
   if (!token || !shop) return (
     <Shell title="Token not found" back="/dashboard">
@@ -36,58 +31,34 @@ export default function Stock() {
     </Shell>
   );
 
-  const product = productOf(token.productId ?? pid);
+  const c = contractOfToken(st, token.id);
+  const cs = c ? contractStatus(c) : "awaiting";
+  const free = Math.max(0, shop.shelf.capacity - shelfUnits(st, token.id));
 
-  if (token.stage !== "A") {
-    const p = product!;
-    const view = {
-      requested: {
-        icon: <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-accent"><Hourglass className="h-9 w-9 text-accent-foreground" /></div>,
-        title: "Waiting for the owner",
-        text: shop.seeded ? "This is a sample shop. You can simulate their answer." : "Approve it yourself from My shop.",
-        main: shop.seeded
-          ? <PrimaryButton onClick={() => actions.decide(token.id, true)} data-testid="button-simulate-approve">Simulate owner approval</PrimaryButton>
-          : <PrimaryButton onClick={() => go("/owner-dashboard")} data-testid="button-go-owner">Open My shop</PrimaryButton>,
-        extra: shop.seeded && <GhostButton onClick={() => actions.decide(token.id, false)} data-testid="button-simulate-reject">Simulate rejection</GhostButton>,
-      },
-      approved: {
-        icon: <TokenChip kind="A" />,
-        title: "Approved. Stock it.",
-        text: `${token.qty} × ${p.name} · ${usd(p.unitCost * (token.qty ?? 0))} wholesale. Simulated purchase, no money charged.`,
-        main: <PrimaryButton onClick={() => actions.stock(token.id)} data-testid="button-stock">Simulate stocking purchase</PrimaryButton>,
-        extra: null,
-      },
-      rejected: {
-        icon: <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-muted"><X className="h-9 w-9 text-muted-foreground" /></div>,
-        title: "Not this time",
-        text: "The owner passed on this product. Try another.",
-        main: <PrimaryButton onClick={() => { actions.patch(token.id, { stage: "A", productId: undefined, qty: undefined, origin: undefined }); setStep(0); }} data-testid="button-retry">Choose another product</PrimaryButton>,
-        extra: null,
-      },
-      B: {
-        icon: <TokenChip kind="B" />,
-        title: "Your shelf is stocked",
-        text: `${token.qty} × ${p.name} at ${shop.name}. Token A became Token B.`,
-        main: <PrimaryButton onClick={() => go("/dashboard")} data-testid="button-dashboard">Go to My shelves</PrimaryButton>,
-        extra: null,
-      },
-    }[token.stage];
-    return (
-      <Shell title={view.title} back="/dashboard">
-        <div className="mx-auto flex max-w-md flex-col items-center pt-8 text-center">
-          {view.icon}
-          <h1 className="font-display mt-6 text-4xl font-bold" data-testid="text-stage-title">{view.title}</h1>
-          <p className="mt-3 text-muted-foreground">{view.text}</p>
-          {token.stage === "B" && <ShelfArt tiers={1} hue={shop.hue} fill={[p.color]} className="mt-6 w-56" />}
-          <div className="mt-8 flex flex-col items-center gap-2">{view.main}{view.extra}</div>
-        </div>
-      </Shell>
-    );
-  }
+  if (cs !== "active" || token.released) return (
+    <Shell title="Contract first" back="/dashboard">
+      <div className="mx-auto flex max-w-md flex-col items-center pt-8 text-center">
+        <span className="grid h-32 w-24 place-items-center rounded-2xl bg-primary font-display text-5xl font-extrabold text-primary-foreground">A</span>
+        <h1 className="font-display mt-6 text-4xl font-bold">Contract first</h1>
+        <p className="mt-3 text-muted-foreground">Token A at {shop.name} is a shelf-use demo record. It turns into a stocked Token B only after the contract is approved and signed by both sides{token.released ? " — this one has ended" : ""}.</p>
+        {c && <PrimaryButton className="mt-8" onClick={() => go(`/contracts/${c.id}`)} data-testid="button-open-contract"><FileSignature className="h-4 w-4" />Open contract ({cs})</PrimaryButton>}
+      </div>
+    </Shell>
+  );
 
+  const product = PRODUCTS.find((p) => p.id === pid);
   const checks = product && origin ? runChecks(product, shop, origin) : [];
   const STEPS = ["Where is it made?", "What goes on the shelf?", "How many?", "Quick checks"];
   const items = PRODUCTS.map((p) => ({ p, c: runChecks(p, shop, origin) })).filter((x) => x.p.origins.includes(origin));
+
+  const submit = () => {
+    if (!product) return;
+    const r = act(() => actions.createListing(token.id, {
+      name: product.name, sku: `${product.id.slice(0, 4).toUpperCase()}-${origin}-${String(Date.now()).slice(-3)}`, category: product.category, description: product.description ?? "",
+      color: product.color, origin, retail: product.retail, cost: product.unitCost, taxRate: shop.terms.taxRate, batch: `B-${origin}-${new Date().getFullYear()}`, expiry: product.expiry, initialQty: qty,
+    }), "Sent to store owner for approval");
+    if (r.ok) go(`/shelf/${token.id}`);
+  };
 
   const body = [
     <div key="0" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -100,10 +71,10 @@ export default function Stock() {
     </div>,
     <div key="1" className="grid grid-cols-2 gap-3 md:grid-cols-3">
       {items.length === 0 && <p className="col-span-full text-center text-muted-foreground">No sample products from {countryName(origin)}.</p>}
-      {items.map(({ p, c }) => {
-        const block = firstBlocker(c);
+      {items.map(({ p, c: ch }) => {
+        const block = firstBlocker(ch);
         return (
-          <Tile key={p.id} selected={pid === p.id} disabled={!!block} onClick={() => { setPid(p.id); setStep(2); }} testId={`tile-product-${p.id}`}>
+          <Tile key={p.id} selected={pid === p.id} disabled={!!block} onClick={() => { setPid(p.id); setQty(Math.min(12, free)); setStep(2); }} testId={`tile-product-${p.id}`}>
             <ShelfArt tiers={1} hue={20} fill={[p.color]} className="h-12 w-full" />
             <span className="font-medium">{p.name}</span>
             <span className="text-xs text-muted-foreground">{usd(p.unitCost)} wholesale</span>
@@ -117,9 +88,9 @@ export default function Stock() {
       <div className="flex items-center gap-4">
         <button aria-label="Fewer" onClick={() => setQty(Math.max(1, qty - 1))} className="grid h-12 w-12 place-items-center rounded-full border border-border active:scale-90" data-testid="button-qty-dec"><Minus className="h-4 w-4" /></button>
         <span className="font-display w-24 text-center text-5xl font-bold tabular-nums" data-testid="text-qty">{qty}</span>
-        <button aria-label="More" onClick={() => setQty(Math.min(SHELF_CAPACITY, qty + 1))} className="grid h-12 w-12 place-items-center rounded-full border border-border active:scale-90" data-testid="button-qty-inc"><Plus className="h-4 w-4" /></button>
+        <button aria-label="More" onClick={() => setQty(Math.min(free, qty + 1))} className="grid h-12 w-12 place-items-center rounded-full border border-border active:scale-90" data-testid="button-qty-inc"><Plus className="h-4 w-4" /></button>
       </div>
-      <p className="text-muted-foreground">{product && usd(product.unitCost * qty)} wholesale · max {SHELF_CAPACITY} per shelf</p>
+      <p className="text-muted-foreground">{product && usd(product.unitCost * qty)} wholesale · {free} units of capacity free</p>
       {product?.expiry && <p className="inline-flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-4 w-4" />Batch expires {new Date(product.expiry).toLocaleDateString()}</p>}
     </div>,
     <div key="3" className="mx-auto max-w-md">
@@ -134,19 +105,14 @@ export default function Stock() {
         ))}
       </ul>
       <p className="mt-4 text-center text-xs text-muted-foreground">Illustrative sample checks. Not legal clearance. No compliance guaranteed.</p>
+      <div className="mt-3"><ErrorNote error={error} /></div>
     </div>,
   ][step];
 
-  const valid = [!!origin, !!pid, qty > 0, checks.length > 0 && checks.every((c) => c.ok)][step];
+  const valid = step === 3 && checks.length > 0 && checks.every((c) => c.ok) && qty >= 1 && qty <= free;
 
   return (
-    <Shell title="Stock your shelf" back="/dashboard">
-      {fresh && step === 0 && (
-        <div className="mb-6 flex items-center justify-center gap-3 text-sm text-muted-foreground" data-testid="text-token-issued">
-          <span className="grid h-8 w-6 place-items-center rounded-md bg-primary font-display font-bold text-primary-foreground">A</span>
-          Token A issued for {shop.name}. Simulated, no money charged.
-        </div>
-      )}
+    <Shell title="Stock your shelf" back={`/shelf/${token.id}`}>
       <div className="flex flex-col items-center gap-3 text-center">
         <StepDots step={step} total={STEPS.length} />
         <h1 className="font-display text-4xl font-bold md:text-5xl">{STEPS[step]}</h1>
@@ -158,8 +124,8 @@ export default function Stock() {
       </div>
       <div className="mt-10 flex items-center justify-center gap-3">
         {step > 0 && <GhostButton onClick={() => setStep(step - 1)} data-testid="button-prev"><ArrowLeft className="h-4 w-4" /> Back</GhostButton>}
-        {step === 2 && <PrimaryButton onClick={() => setStep(3)} data-testid="button-next">Run checks <ArrowRight className="h-4 w-4" /></PrimaryButton>}
-        {step === 3 && <PrimaryButton disabled={!valid} onClick={() => actions.request(token.id, pid, origin, qty)} data-testid="button-request">Request owner approval</PrimaryButton>}
+        {step === 2 && <PrimaryButton disabled={free < 1} onClick={() => setStep(3)} data-testid="button-next">Run checks <ArrowRight className="h-4 w-4" /></PrimaryButton>}
+        {step === 3 && <PrimaryButton disabled={!valid || pending} onClick={submit} data-testid="button-request">Request owner approval</PrimaryButton>}
       </div>
     </Shell>
   );

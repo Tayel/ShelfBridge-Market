@@ -22,3 +22,9 @@ The user selected an interactive demo with simulated purchases for the first ver
 **Why:** This was the user's explicit choice after discussing token, payment, and compliance implications.
 
 **How to apply:** Clearly distinguish simulated trades, earnings, and illustrative product checks from real transactions or legal compliance clearance. Revisit scope before adding real payments.
+
+The user confirmed the expanded commerce requirements should still be a demo with simulated contracts, checkout, and settlements. Target markets are Egypt, Portugal, Hungary, Turkey, and UAE.
+
+**Why:** The user explicitly selected the demo scope when asked whether the detailed commerce requirements superseded the original simulation.
+
+**How to apply:** Treat legal execution, identity verification, bank transfers, and notifications through external services as future production integrations, not capabilities a browser-local demo can claim.

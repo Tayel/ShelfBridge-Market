@@ -35,6 +35,12 @@ export default function Landing() {
           </motion.div>
         ))}
       </div>
+      <div className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-2 text-sm">
+        {[["/scan", "I'm shopping · scan a shelf", "scan"], ["/admin", "Platform admin console", "admin"], ["/guide", "How this demo works", "guide"]].map(([href, label, id]) => (
+          <Link key={id} href={href} data-testid={`link-secondary-${id}`} className="rounded-full border border-border px-4 py-2 text-muted-foreground transition hover:border-primary/40 hover:text-foreground">{label}</Link>
+        ))}
+      </div>
+      <p className="mx-auto mt-4 max-w-xl text-center text-xs text-muted-foreground">Demo across Egypt, Portugal, Hungary, Türkiye and the UAE. Contracts, payments and settlements are simulated in this browser only.</p>
       <img src={`${base}images/street.png`} alt="Three small shopfronts from different countries" className="mx-auto mt-16 w-full max-w-2xl opacity-90" />
     </Shell>
   );

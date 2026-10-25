@@ -20,8 +20,8 @@ export default function Explore() {
   const st = useStore();
   const [country, setCountry] = useState("all");
   const [biz, setBiz] = useState("all");
-  const shops = useMemo(() => st.shops.filter((s) => (country === "all" || s.country === country) && (biz === "all" || s.business === biz)), [st.shops, country, biz]);
-  const usedCountries = COUNTRIES.filter((c) => st.shops.some((s) => s.country === c.code));
+  const shops = useMemo(() => st.shops.filter((s) => s.status === "approved" && (country === "all" || s.country === country) && (biz === "all" || s.business === biz)), [st.shops, country, biz]);
+  const usedCountries = COUNTRIES.filter((c) => st.shops.some((s) => s.status === "approved" && s.country === c.code));
 
   return (
     <Shell title="Find a shelf" back="/">

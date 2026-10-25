@@ -6,7 +6,10 @@ import { Shell, PrimaryButton, GhostButton, Tile, StepDots } from "@/components/
 import { IsoFloor } from "@/components/iso-floor";
 import { ShelfArt } from "@/components/shelf-art";
 import { BUSINESSES, COUNTRIES, CATEGORIES, RESTRICTIONS, businessOf, countryName, categoryLabel } from "@/lib/data";
-import { actions, usd } from "@/lib/store";
+import { usd } from "@/lib/store";
+import { actions } from "@/lib/actions";
+import { useAct } from "@/hooks/use-act";
+import { ErrorNote } from "@/components/kit";
 
 const STEPS = ["What do you run?", "Which country?", "Where is it?", "How big is it?", "Tap spots for shelves", "Shelves and price", "What can go on them?", "Ready to publish"];
 
@@ -39,14 +42,15 @@ export default function Owner() {
   const [cats, setCats] = useState<string[]>(["food", "craft"]);
   const [rules, setRules] = useState<string[]>([]);
   const hue = 12;
+  const { act, error } = useAct();
 
   const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const valid = [!!business, !!country, city.trim() && name.trim() && location.trim(), true, bricks.length > 0, price > 0, cats.length > 0, true][step];
   const resize = (w: number, d: number) => { setWidth(w); setDepth(d); setBricks([]); };
 
   const publish = () => {
-    actions.publishShop({ name: name.trim(), country, city: city.trim(), location: location.trim(), business, width, depth, bricks, tiers, price, categories: cats, restrictions: rules, hue });
-    go("/owner-dashboard");
+    const r = act(() => actions.createShop({ name: name.trim(), country, city: city.trim(), location: location.trim(), business, width, depth, bricks, tiers, price, categories: cats, restrictions: rules, hue }), "Submitted for platform approval (simulated)");
+    if (r.ok && r.id) go(`/owner-dashboard/shops/${r.id}?new=1`);
   };
 
   const B = businessOf(business);
@@ -131,12 +135,13 @@ export default function Owner() {
           </motion.div>
         </AnimatePresence>
       </div>
+      {step === STEPS.length - 1 && <div className="mx-auto mt-6 max-w-md space-y-2"><ErrorNote error={error} /><p className="text-center text-xs text-muted-foreground">Next you'll add registration (demo value), shelf dimensions, capacity and rental terms. Stores go live after simulated admin approval.</p></div>}
       <div className="mt-10 flex items-center justify-center gap-3">
         {step > 0 && <GhostButton onClick={() => setStep(step - 1)} data-testid="button-prev"><ArrowLeft className="h-4 w-4" /> Back</GhostButton>}
         {step < STEPS.length - 1 ? (
           step > 1 && <PrimaryButton disabled={!valid} onClick={() => setStep(step + 1)} data-testid="button-next">Continue <ArrowRight className="h-4 w-4" /></PrimaryButton>
         ) : (
-          <PrimaryButton onClick={publish} data-testid="button-publish"><Check className="h-4 w-4" /> Publish demo listing</PrimaryButton>
+          <PrimaryButton onClick={publish} data-testid="button-publish"><Check className="h-4 w-4" /> Submit demo store</PrimaryButton>
         )}
       </div>
     </Shell>

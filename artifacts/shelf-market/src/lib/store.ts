@@ -1,98 +1,161 @@
+/**
+ * Browser-only demo store (localStorage). Not production-safe:
+ * - No server, no multi-device sync: other phones/browsers see their own copy.
+ * - Cross-tab: tabs refresh on the `storage` event and every mutation re-reads
+ *   the latest saved state before applying guards, but there are no true locks.
+ */
 import { useSyncExternalStore } from "react";
-import { PRODUCTS, SHELF_CAPACITY, type Product } from "./data";
+import type { Contract, ContractVersion, Listing, Result, Role, Shop, State, Token } from "./types";
+import { DemoError, YOU_HOLDER, _internal, audit, shopDefaults } from "./ops";
+import { LEGACY_SEEDS, SEED_HOLDERS, SEED_SHOPS, emptyState, seedState } from "./seed";
+import { PRODUCTS } from "./data";
+import { nowIso, today, uid } from "./util";
 
-export interface Shop {
-  id: string; name: string; country: string; city: string; location: string;
-  business: string; width: number; depth: number; bricks: number[];
-  tiers: number; price: number; categories: string[]; restrictions: string[];
-  seeded: boolean; hue: number;
+export type { Shop, Token, State } from "./types";
+export { usd } from "./util";
+export { slotsOf, takenSlots } from "./selectors";
+
+const KEY = "inraf-demo-v2";
+const V1_KEY = "shelf-demo-v1"; // read for migration; never deleted
+
+const arr = <T,>(x: unknown): T[] => (Array.isArray(x) ? (x as T[]) : []);
+
+/** Fill any missing fields so older or partially-written data never crashes the UI. */
+function normalize(raw: Partial<State>): State {
+  const base = emptyState();
+  const s: State = {
+    ...base,
+    role: (["owner", "holder", "customer", "admin"] as Role[]).includes(raw.role as Role) ? (raw.role as Role) : "holder",
+    shops: arr<Shop>(raw.shops).filter((x) => x && x.id).map((x) => shopDefaults(x)),
+    tokens: arr<Token>(raw.tokens).filter((t) => t && t.id),
+    holders: arr(raw.holders),
+    contracts: arr(raw.contracts),
+    invoices: arr(raw.invoices),
+    listings: arr(raw.listings),
+    orders: arr(raw.orders),
+    ledger: arr(raw.ledger),
+    notifications: arr(raw.notifications),
+    audit: arr(raw.audit),
+    seq: typeof raw.seq === "number" ? raw.seq : 0,
+    migratedFromV1: raw.migratedFromV1,
+  };
+  SEED_HOLDERS.forEach((h) => { if (!s.holders.some((x) => x.id === h.id)) s.holders.push({ ...h }); });
+  s.tokens = s.tokens.map((t) => ({ ...t, sold: t.sold ?? 0, revenue: t.revenue ?? 0, sales: t.sales ?? [], holderId: t.holderId ?? YOU_HOLDER, contractId: t.contractId ?? "", stage: t.stage ?? "A" }));
+  // Any token without a contract gets a transparent migrated contract (no signatures fabricated).
+  s.tokens.forEach((t) => {
+    if (t.contractId && s.contracts.some((c) => c.id === t.contractId)) return;
+    const shop = s.shops.find((x) => x.id === t.shopId);
+    if (!shop) return;
+    const holder = s.holders.find((h) => h.id === t.holderId) ?? s.holders[0];
+    const start = (t.createdAt ?? nowIso()).slice(0, 10);
+    const v: ContractVersion = {
+      v: 1, kind: "migrated", createdAt: nowIso(), status: "awaiting",
+      snapshot: _internal.snapshot(s, shop, t, holder, start, shop.terms.months, t.rent ?? shop.price),
+      note: "Migrated from an earlier demo rental. No approval or signatures were recorded then, so none are shown here.",
+    };
+    const c: Contract = { id: uid("ctr"), ref: _internal.nextRef(s, "CTR"), tokenId: t.id, shopId: shop.id, holderId: holder.id, versions: [v], createdAt: nowIso() };
+    s.contracts.push(c); t.contractId = c.id;
+    audit(s, "System", "contract.migrated", c.ref, "Earlier rental converted to contract awaiting admin approval and both signatures; sales blocked until active");
+    s.notifications.push({ id: uid("ntf"), at: nowIso(), role: "holder", title: "Rental needs a contract", body: `${shop.name}: your earlier rental now needs admin approval and both signatures before sales.`, link: `/contracts/${c.id}`, read: false });
+  });
+  // Legacy single-product tokens become listings.
+  s.tokens.forEach((t) => {
+    if (!t.productId || s.listings.some((l) => l.tokenId === t.id)) return;
+    const p = PRODUCTS.find((x) => x.id === t.productId);
+    if (!p) return;
+    const shop = s.shops.find((x) => x.id === t.shopId);
+    const status: Listing["status"] = t.stage === "requested" ? "pending" : t.stage === "rejected" ? "rejected" : "approved";
+    s.listings.push({
+      id: uid("lst"), tokenId: t.id, shopId: t.shopId, holderId: t.holderId, name: p.name, sku: `${p.id.slice(0, 4).toUpperCase()}-${t.origin ?? "XX"}-L1`,
+      category: p.category, description: p.description ?? "", color: p.color, origin: t.origin ?? "", retail: p.retail, cost: p.unitCost,
+      taxRate: shop?.terms.taxRate ?? 10, batch: "LEGACY", expiry: p.expiry, initialQty: t.qty ?? 0, available: Math.max(0, (t.qty ?? 0) - t.sold),
+      sold: t.sold, returned: 0, status, statusNote: t.stage === "B" ? "Migrated stock — activate after contract is active" : undefined,
+      createdAt: t.createdAt ?? nowIso(), updatedAt: nowIso(), legacyRevenue: t.revenue,
+    });
+  });
+  if (!s.migratedFromV1 && s.shops.length === 0) return seedState();
+  return s;
 }
 
-export type TokenStage = "A" | "requested" | "approved" | "rejected" | "B";
-
-export interface Token {
-  id: string; shopId: string; slot: number; stage: TokenStage; rent: number; createdAt: string;
-  productId?: string; origin?: string; qty?: number; stockCost?: number;
-  sold: number; revenue: number; sales: { at: string; amount: number }[];
+function migrateV1(v1: { shops?: Shop[]; tokens?: Token[] }): State {
+  const seeded = seedState();
+  const oldShops = arr<Shop>(v1.shops);
+  const oldTokens = arr<Token>(v1.tokens);
+  const userShops = oldShops.filter((x) => !x.seeded).map((x) => shopDefaults({ ...x, status: "approved", statusNote: "Carried over from the earlier demo where listings were public." }));
+  const referenced = new Set(oldTokens.map((t) => t.shopId));
+  const seededIds = new Set(SEED_SHOPS.map((x) => x.id));
+  const legacy = LEGACY_SEEDS.filter((x) => referenced.has(x.id) && !seededIds.has(x.id));
+  const merged: Partial<State> = {
+    ...seeded,
+    shops: [...seeded.shops, ...legacy, ...userShops],
+    tokens: [...seeded.tokens, ...oldTokens.map((t) => ({ ...t, holderId: YOU_HOLDER, contractId: "" }))],
+    migratedFromV1: nowIso(),
+  };
+  return normalize(merged);
 }
 
-export interface State { shops: Shop[]; tokens: Token[]; }
-
-const KEY = "shelf-demo-v1";
-
-const seedShops: Shop[] = [
-  { id: "s-lisbon", name: "Mercearia da Graça", country: "PT", city: "Lisbon", location: "Rua da Graça 14", business: "4711", width: 5, depth: 4, bricks: [0, 1, 2, 5, 10, 15], tiers: 3, price: 38, categories: ["food", "beauty", "craft", "drinks"], restrictions: ["no-plastic"], seeded: true, hue: 12 },
-  { id: "s-nairobi", name: "Kilimani Corner", country: "KE", city: "Nairobi", location: "Argwings Kodhek Rd", business: "5610", width: 4, depth: 4, bricks: [0, 3, 12, 15], tiers: 2, price: 24, categories: ["food", "drinks", "textile"], restrictions: ["fair-trade"], seeded: true, hue: 150 },
-  { id: "s-kyoto", name: "Hanaya Tsuki", country: "JP", city: "Kyoto", location: "Sanjo-dori 82", business: "4776", width: 4, depth: 3, bricks: [0, 1, 2, 3], tiers: 2, price: 61, categories: ["craft", "drinks", "textile"], restrictions: [], seeded: true, hue: 210 },
-  { id: "s-oaxaca", name: "Libros del Sol", country: "MX", city: "Oaxaca", location: "Calle Macedonio Alcalá", business: "4761", width: 5, depth: 3, bricks: [0, 4, 10, 14], tiers: 3, price: 19, categories: ["food", "craft", "textile", "alcohol"], restrictions: [], seeded: true, hue: 40 },
-  { id: "s-dubai", name: "Al Fahidi Pharmacy", country: "AE", city: "Dubai", location: "Al Fahidi St", business: "4772", width: 4, depth: 4, bricks: [0, 1, 4, 5], tiers: 2, price: 72, categories: ["beauty", "food", "alcohol"], restrictions: ["no-animal-test"], seeded: true, hue: 330 },
-  { id: "s-berlin", name: "Backstube Krause", country: "DE", city: "Berlin", location: "Weserstraße 31", business: "1071", width: 4, depth: 3, bricks: [3, 7, 11], tiers: 2, price: 44, categories: ["food", "drinks", "craft"], restrictions: ["no-plastic"], seeded: true, hue: 270 },
-];
-
-const initial = (): State => ({ shops: seedShops, tokens: [] });
-
-let state: State = (() => {
+function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as State;
-  } catch { /* ignore */ }
-  return initial();
-})();
-
-const listeners = new Set<() => void>();
-function set(next: State) {
-  state = next;
-  localStorage.setItem(KEY, JSON.stringify(state));
-  listeners.forEach((l) => l());
+    if (raw) return normalize(JSON.parse(raw));
+    const old = localStorage.getItem(V1_KEY);
+    if (old) {
+      const s = migrateV1(JSON.parse(old));
+      localStorage.setItem(KEY, JSON.stringify(s));
+      return s;
+    }
+  } catch { /* fall through to seed */ }
+  const s = seedState();
+  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
+  return s;
 }
+
+let state: State = load();
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key !== KEY || !e.newValue) return;
+    try { state = normalize(JSON.parse(e.newValue)); emit(); } catch { /* ignore malformed */ }
+  });
+}
+
+function readLatest(): State {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return normalize(JSON.parse(raw));
+  } catch { /* use memory */ }
+  return state;
+}
+
+let busy = false;
+/** Apply a guarded mutation against the latest saved state. Errors are returned, never thrown. */
+export function run(fn: (draft: State) => string | void): Result {
+  if (busy) return { ok: false, error: "Another action is still being applied. Try again." };
+  busy = true;
+  try {
+    const draft: State = JSON.parse(JSON.stringify(readLatest()));
+    const id = fn(draft);
+    try { localStorage.setItem(KEY, JSON.stringify(draft)); }
+    catch { return { ok: false, error: "Browser storage is full or blocked — the change was not saved." }; }
+    state = draft; emit();
+    return { ok: true, id: id || undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof DemoError ? e.message : `Unexpected error: ${e instanceof Error ? e.message : String(e)}` };
+  } finally {
+    busy = false;
+  }
+}
+
 export function useStore(): State {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => state);
 }
-const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
+export const getState = () => state;
 
-export const slotsOf = (s: Shop) => s.bricks.length * s.tiers;
-export const takenSlots = (st: State, shopId: string) =>
-  new Set(st.tokens.filter((t) => t.shopId === shopId).map((t) => t.slot));
-export const productOf = (id?: string): Product | undefined => PRODUCTS.find((p) => p.id === id);
-export const remaining = (t: Token) => Math.max(0, (t.qty ?? 0) - t.sold);
+/** Explicit, user-confirmed reset of the v2 demo data. The original v1 key is left untouched. */
+export function resetDemo(): Result {
+  return run((d) => { const fresh = seedState(); Object.assign(d, fresh); });
+}
 
-export const actions = {
-  publishShop(shop: Omit<Shop, "id" | "seeded">): string {
-    const id = uid("shop");
-    set({ ...state, shops: [...state.shops, { ...shop, id, seeded: false }] });
-    return id;
-  },
-  deleteShop(id: string) {
-    if (state.tokens.some((t) => t.shopId === id)) return false;
-    set({ ...state, shops: state.shops.filter((s) => s.id !== id) });
-    return true;
-  },
-  rent(shopId: string, slot: number): string | null {
-    const shop = state.shops.find((s) => s.id === shopId);
-    if (!shop || slot >= slotsOf(shop) || takenSlots(state, shopId).has(slot)) return null;
-    const id = uid("tok");
-    set({ ...state, tokens: [...state.tokens, { id, shopId, slot, stage: "A", rent: shop.price, createdAt: new Date().toISOString(), sold: 0, revenue: 0, sales: [] }] });
-    return id;
-  },
-  patch(id: string, p: Partial<Token>) {
-    set({ ...state, tokens: state.tokens.map((t) => (t.id === id ? { ...t, ...p } : t)) });
-  },
-  request(id: string, productId: string, origin: string, qty: number) {
-    const q = Math.max(1, Math.min(SHELF_CAPACITY, Math.floor(qty)));
-    this.patch(id, { stage: "requested", productId, origin, qty: q });
-  },
-  decide(id: string, ok: boolean) { this.patch(id, { stage: ok ? "approved" : "rejected" }); },
-  stock(id: string) {
-    const t = state.tokens.find((x) => x.id === id); const p = productOf(t?.productId);
-    if (!t || !p || t.stage !== "approved") return;
-    this.patch(id, { stage: "B", stockCost: +(p.unitCost * (t.qty ?? 0)).toFixed(2) });
-  },
-  sell(id: string) {
-    const t = state.tokens.find((x) => x.id === id); const p = productOf(t?.productId);
-    if (!t || !p || t.stage !== "B" || remaining(t) <= 0) return;
-    this.patch(id, { sold: t.sold + 1, revenue: +(t.revenue + p.retail).toFixed(2), sales: [...t.sales, { at: new Date().toISOString(), amount: p.retail }] });
-  },
-  reset() { set(initial()); },
-};
-
-export const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+export const todayIso = today;
