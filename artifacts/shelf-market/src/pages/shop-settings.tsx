@@ -3,6 +3,7 @@ import { Link, useParams } from "wouter";
 import { Shell, PrimaryButton } from "@/components/shell";
 import { Card, ErrorNote, Field, Notice, Pill, inputCls } from "@/components/kit";
 import { IsoFloor } from "@/components/iso-floor";
+import { PhotoGallery, PhotoUploader } from "@/components/photos";
 import { useStore } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
@@ -21,9 +22,10 @@ function Form({ shop }: { shop: Shop }) {
   const [info, setInfo] = useState({ name: shop.name, address: shop.address, registration: shop.registration, ownerName: shop.ownerName, price: shop.price, floorNote: shop.floorNote, city: shop.city });
   const [shelf, setShelf] = useState<ShelfSpec>(shop.shelf);
   const [terms, setTerms] = useState<RentalTerms>(shop.terms);
+  const [photos, setPhotos] = useState(shop.photos);
   const isNew = typeof window !== "undefined" && window.location.search.includes("new=1");
 
-  const save = () => act(() => actions.updateShop(shop.id, { ...info, price: Number(info.price), shelf: { widthCm: Number(shelf.widthCm), heightCm: Number(shelf.heightCm), depthCm: Number(shelf.depthCm), capacity: Math.floor(Number(shelf.capacity)) }, terms: { ...terms, months: Math.floor(Number(terms.months)), deposit: Number(terms.deposit), taxRate: Number(terms.taxRate), lateFeePct: Number(terms.lateFeePct), graceDays: Math.floor(Number(terms.graceDays)) } }), "Store details saved");
+  const save = () => act(() => actions.updateShop(shop.id, { ...info, photos, price: Number(info.price), shelf: { widthCm: Number(shelf.widthCm), heightCm: Number(shelf.heightCm), depthCm: Number(shelf.depthCm), capacity: Math.floor(Number(shelf.capacity)) }, terms: { ...terms, months: Math.floor(Number(terms.months)), deposit: Number(terms.deposit), taxRate: Number(terms.taxRate), lateFeePct: Number(terms.lateFeePct), graceDays: Math.floor(Number(terms.graceDays)) } }), "Store details saved");
   const n = (v: string) => (v === "" ? 0 : Number(v));
   const ro = shop.seeded;
 
@@ -47,6 +49,13 @@ function Form({ shop }: { shop: Shop }) {
             <Field label="Address"><input disabled={ro} value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} className={inputCls} data-testid="input-address" /></Field>
             <Field label="Registration no." hint="Demo value only — don't enter real registration data."><input disabled={ro} value={info.registration} onChange={(e) => setInfo({ ...info, registration: e.target.value })} className={inputCls} data-testid="input-registration" /></Field>
           </div>
+        </Card>
+        <Card className="space-y-4" testId="card-photos">
+          <div>
+            <p className="font-display text-lg font-bold">Photos</p>
+            <p className="text-sm text-muted-foreground">Makers see these first. Retake them when the shelf or the shop changes.</p>
+          </div>
+          {ro ? <PhotoGallery shop={shop} /> : <PhotoUploader photos={photos} onChange={setPhotos} />}
         </Card>
         <Card className="space-y-4">
           <p className="font-display text-lg font-bold">Each shelf</p>

@@ -37,6 +37,7 @@ function Overview({ st }: { st: State }) {
         <Stat label="Listed products" value={st.listings.filter((l) => l.status !== "removed").length} sub={`${st.listings.filter((l) => l.status === "active").length} on sale · ${st.listings.reduce((a, l) => a + (l.status === "active" ? l.available : 0), 0)} units`} />
         <Stat label="GMV (captured, net of refunds)" value={usd(m.gross)} testId="text-stat-gmv" />
         <Stat label="Platform revenue" value={usd(m.fees)} sub="commission + service fees" />
+        <Stat label="Shops' share of sales" value={usd(m.shopShare)} sub="kept by stores on share contracts" />
         <Stat label="Payable to holders" value={usd(round2(m.payable - m.settled))} sub={`${usd(m.settled)} settled`} />
         <Stat label="Rent due to owners" value={usd(rentDue)} sub={`${overdue.length} overdue invoices`} />
         <Stat label="Transactions" value={st.orders.length} sub={`${count("captured")} captured · ${count("authorized")} pending · ${count("failed")} failed · ${count("refunded")} refunded`} />
@@ -72,7 +73,7 @@ function Finance({ st }: { st: State }) {
 
   const exportCsv = () => {
     if (view === "ledger") downloadBlob(`inraf-ledger-${Date.now()}.csv`, toCsv(ledger.map((e) => ({ entry: e.id, at: e.at, type: e.type, amount_usd: e.amount, financial: e.financial ? "yes" : "no", order: st.orders.find((o) => o.id === e.orderId)?.ref, invoice: st.invoices.find((i) => i.id === e.invoiceId)?.ref, store: shopName(e.shopId), shelf: tokLabel(e.tokenId), holder: holderOf(st, e.holderId).name, memo: e.memo }))), "text/csv");
-    else downloadBlob(`inraf-orders-${Date.now()}.csv`, toCsv(orders.map((o) => ({ order: o.ref, created: o.createdAt, captured: o.capturedAt, settled: o.settledAt, store: shopName(o.shopId), shelf: tokLabel(o.tokenId), holder: holderOf(st, o.holderId).name, product: o.productName, sku: o.sku, qty: o.qty, gross: o.gross, tax: o.tax, fees: round2(o.commission + o.serviceFee), net: o.net, payment: o.payment, payout: o.payout, refund: o.refund?.status, sim_ref: o.simRef, customer: o.customerLabel }))), "text/csv");
+    else downloadBlob(`inraf-orders-${Date.now()}.csv`, toCsv(orders.map((o) => ({ order: o.ref, created: o.createdAt, captured: o.capturedAt, settled: o.settledAt, store: shopName(o.shopId), shelf: tokLabel(o.tokenId), holder: holderOf(st, o.holderId).name, product: o.productName, sku: o.sku, qty: o.qty, gross: o.gross, tax: o.tax, fees: round2(o.commission + o.serviceFee), shop_share: o.shopShare ?? 0, net: o.net, payment: o.payment, payout: o.payout, refund: o.refund?.status, sim_ref: o.simRef, customer: o.customerLabel }))), "text/csv");
   };
 
   return (
@@ -101,7 +102,7 @@ function Finance({ st }: { st: State }) {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{o.ref} · {o.qty} × {o.productName} <span className="text-xs text-muted-foreground">({o.sku})</span></p>
                   <p className="text-xs text-muted-foreground">{shopName(o.shopId)} · {tokLabel(o.tokenId)} · {holderOf(st, o.holderId).name} · {o.customerLabel} · {fmtTime(o.createdAt)} · {o.simRef}</p>
-                  <p className="text-xs text-muted-foreground tabular-nums">gross {usd(o.gross)} · tax {usd(o.tax)} · fees {usd(round2(o.commission + o.serviceFee))} · net {usd(o.net)}{o.settledAt ? ` · settled ${fmtTime(o.settledAt)}` : ""}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">gross {usd(o.gross)} · tax {usd(o.tax)} · fees {usd(round2(o.commission + o.serviceFee))}{o.shopShare ? ` · shop share ${usd(o.shopShare)}` : ""} · net {usd(o.net)}{o.settledAt ? ` · settled ${fmtTime(o.settledAt)}` : ""}</p>
                 </div>
                 <Pill>{o.payment}</Pill>
                 {o.payout !== "none" && <Pill tone={o.payout === "settled" ? "good" : o.payout === "failed" || o.payout === "reversed" ? "bad" : "warn"}>payout {o.payout}</Pill>}

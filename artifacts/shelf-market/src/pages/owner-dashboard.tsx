@@ -10,7 +10,7 @@ import { useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { holderOf } from "@/lib/ops";
-import { awaitingVersion, contractStatus, executedVersion, invoiceStatus, lateFeeFor, shelfLabel, slotsOf } from "@/lib/selectors";
+import { awaitingVersion, contractStatus, executedVersion, invoiceStatus, lateFeeFor, shelfLabel, shopShareMoney, slotsOf } from "@/lib/selectors";
 import { daysUntil, fmtDate, round2 } from "@/lib/util";
 
 export default function OwnerDashboard() {
@@ -28,6 +28,8 @@ export default function OwnerDashboard() {
   const toSign = contracts.filter((c) => { const v = awaitingVersion(c); return v && !c.terminatedAt && !v.ownerSig; });
   const products = st.listings.filter((l) => ids.has(l.shopId) && l.status === "pending");
   const invoices = st.invoices.filter((i) => contracts.some((c) => c.id === i.contractId) && invoiceStatus(i) !== "void");
+  const share = shopShareMoney(st, [...ids]);
+  const shareOrders = st.orders.filter((o) => ids.has(o.shopId) && o.shopShare && (o.payment === "captured" || o.payment === "refunded")).slice().reverse();
   const sumBy = (k: string) => round2(invoices.filter((i) => invoiceStatus(i) === k).reduce((a, i) => a + i.total + (k === "paid" ? i.lateFee ?? 0 : lateFeeFor(st, i)), 0));
   const expiring = contracts.filter((c) => contractStatus(c) === "active" && daysUntil(executedVersion(c)!.snapshot.terms.end) <= 30);
 
@@ -121,6 +123,21 @@ export default function OwnerDashboard() {
             <Stat label="Due" value={usd(sumBy("due"))} />
             <Stat label="Overdue (+ late fees)" value={usd(sumBy("overdue"))} />
           </div>
+          {(share.earned !== 0 || shareOrders.length > 0) && (
+            <Card testId="card-share">
+              <p className="font-display text-lg font-bold">Share of sales</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <Stat label="Earned (after refunds)" value={usd(share.earned)} testId="text-share-earned" />
+                <Stat label="Settled to you" value={usd(share.settled)} sub="settles with each maker payout" />
+                <Stat label={share.recovery ? "Owed back (refunds)" : "Not settled yet"} value={usd(share.recovery || share.unsettled)} />
+              </div>
+              <ul className="mt-3 divide-y divide-border text-sm">
+                {shareOrders.slice(0, 8).map((o) => (
+                  <li key={o.id} className="flex flex-wrap items-center gap-2 py-2"><span className="flex-1">{o.ref} · {o.qty} × {o.productName}<br /><span className="text-xs text-muted-foreground">{o.sharePct}% of {usd(o.subtotal)}</span></span><span className="tabular-nums">{usd(o.payment === "refunded" ? 0 : o.shopShare!)}</span><Pill>{o.payment === "refunded" ? "refunded" : o.payout === "settled" ? "settled" : "pending"}</Pill></li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <Card>
             <ul className="divide-y divide-border text-sm">
               {invoices.length === 0 && <li className="py-3 text-muted-foreground">No rent schedule yet — it starts when a contract activates.</li>}

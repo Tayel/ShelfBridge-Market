@@ -5,7 +5,7 @@
  */
 import type {
   Contract, ContractSnapshot, ContractVersion, Holder, LedgerEntry, LedgerType, Listing, Order, RentInvoice,
-  RentalTerms, Role, Shop, State, Token, VersionKind,
+  RentalTerms, Role, Shop, ShopListing, ShopPhoto, State, Token, VersionKind,
 } from "./types";
 import {
   awaitingVersion, contractOfToken, contractStatus, executedVersion, invoiceStatus, isExpired, lateFeeFor,
@@ -53,6 +53,14 @@ export function defaultTerms(country: string): RentalTerms {
   };
 }
 
+export function defaultListing(): ShopListing {
+  return {
+    shelfType: "eye-level", footTraffic: 150, features: [], instantBook: false, pricing: "fixed", salesSharePct: 0,
+    cancellation: "moderate", access: "open", responseRate: 100, responseHours: 24, ownerSince: new Date().getFullYear(),
+    sellsWell: "", nearby: [],
+  };
+}
+
 export function shopDefaults(p: Partial<Shop> & { id: string }): Shop {
   const country = p.country ?? "PT";
   return {
@@ -64,26 +72,47 @@ export function shopDefaults(p: Partial<Shop> & { id: string }): Shop {
     ...p,
     country,
     terms: { ...defaultTerms(country), ...(p.terms ?? {}) },
+    listing: { ...defaultListing(), ...(p.listing ?? {}) },
+    photos: Array.isArray(p.photos) ? p.photos : [],
   } as Shop;
 }
 
+/** Monthly fixed rent: none when the shop is paid only by a share of sales. */
+export const rentOf = (shop: Shop) => (shop.listing.pricing === "share" ? 0 : shop.price);
+
 // ---------- stores ----------
-export type ShopInput = Pick<Shop, "name" | "country" | "city" | "location" | "business" | "width" | "depth" | "bricks" | "tiers" | "price" | "categories" | "restrictions" | "hue">;
+export type ShopInput = Pick<Shop, "name" | "country" | "city" | "location" | "business" | "width" | "depth" | "bricks" | "tiers" | "price" | "categories" | "restrictions" | "hue"> & {
+  listing?: Partial<ShopListing>; months?: number; photos?: ShopPhoto[];
+};
+
+/** Makers need to see both the shop and the actual shelf before they rent. */
+function checkPhotos(photos: ShopPhoto[]) {
+  if (photos.length > 8) fail("Add up to 8 photos.");
+  if (!photos.some((p) => p.kind === "front")) fail("Add a photo of the shop front.");
+  if (!photos.some((p) => p.kind === "shelf")) fail("Add at least one photo of the shelf you're renting out.");
+}
 
 export function createShop(s: State, input: ShopInput): string {
   if (!input.name.trim()) fail("Shop name is required.");
   if (input.bricks.length === 0) fail("Raise at least one shelf spot.");
+  const L = input.listing;
+  if (L && (L.pricing === "share" || L.pricing === "hybrid") && !(L.salesSharePct! > 0 && L.salesSharePct! <= 50)) fail("Share of sales must be between 1% and 50%.");
   const id = uid("shop");
-  s.shops.push(shopDefaults({ ...input, id, seeded: false, status: "pending", address: `${input.location}, ${input.city}`, registration: `DEMO-${input.country}-${Math.floor(1000 + Math.random() * 8999)}` }));
+  checkPhotos(input.photos ?? []);
+  const { listing, months, ...rest } = input;
+  const base = shopDefaults({ id, country: input.country });
+  s.shops.push(shopDefaults({ ...rest, id, listing: { ...base.listing, ...listing }, terms: { ...base.terms, months: months ?? base.terms.months }, seeded: false, status: "pending", address: `${input.location}, ${input.city}`, registration: `DEMO-${input.country}-${Math.floor(1000 + Math.random() * 8999)}` }));
   audit(s, ROLE_LABEL.owner, "store.submitted", id, `${input.name} submitted for platform approval`);
   notify(s, "admin", "New store awaiting approval", `${input.name} (${input.city}) was submitted.`, "/admin?tab=stores");
   notify(s, "owner", "Store submitted", `${input.name} is pending platform approval (simulated admin).`, `/owner-dashboard/shops/${id}`);
   return id;
 }
 
-export function updateShop(s: State, id: string, patch: Partial<Pick<Shop, "name" | "address" | "registration" | "ownerName" | "price" | "floorNote" | "shelf" | "terms" | "city">>) {
+export function updateShop(s: State, id: string, patch: Partial<Pick<Shop, "name" | "address" | "registration" | "ownerName" | "price" | "floorNote" | "shelf" | "terms" | "city" | "photos">>) {
   const shop = shopOf(s, id);
   if (shop.seeded) fail("Seeded sample stores are read-only.");
+  // Shops listed before photos were required can keep saving other details until they add some.
+  if (patch.photos && (patch.photos.length || shop.photos.length)) checkPhotos(patch.photos);
   if (patch.shelf && (patch.shelf.capacity < 1 || patch.shelf.widthCm < 10 || patch.shelf.heightCm < 10 || patch.shelf.depthCm < 10)) fail("Shelf dimensions must be at least 10 cm and capacity at least 1 unit.");
   if (patch.price !== undefined && patch.price <= 0) fail("Rent must be above zero.");
   if (patch.terms && (patch.terms.months < 1 || patch.terms.months > 36)) fail("Duration must be 1–36 months.");
@@ -111,8 +140,11 @@ export function deleteShop(s: State, id: string) {
 }
 
 // ---------- contracts ----------
-function snapshot(s: State, shop: Shop, token: Token, holder: Holder, start: string, months: number, rent: number, terms?: RentalTerms): ContractSnapshot {
+function snapshot(s: State, shop: Shop, token: Token, holder: Holder, start: string, months: number, rent: number, terms?: RentalTerms & Pick<ContractSnapshot["terms"], "pricing" | "salesSharePct">): ContractSnapshot {
   const t = terms ?? shop.terms;
+  // New requests take the listing's pricing; new versions keep what the signed version had.
+  const pricing = terms ? terms.pricing ?? "fixed" : shop.listing.pricing;
+  const salesSharePct = pricing === "fixed" ? 0 : terms ? terms.salesSharePct ?? 0 : shop.listing.salesSharePct;
   return JSON.parse(JSON.stringify({
     store: { id: shop.id, name: shop.name, address: shop.address || `${shop.location}, ${shop.city}`, city: shop.city, country: shop.country, registration: shop.registration, ownerName: shop.ownerName },
     shelf: {
@@ -122,7 +154,7 @@ function snapshot(s: State, shop: Shop, token: Token, holder: Holder, start: str
       categories: shop.categories, restrictions: shop.restrictions,
     },
     holder: { id: holder.id, name: holder.name, kind: holder.kind, registration: holder.registration },
-    terms: { ...t, months, monthlyRent: rent, start, end: addMonths(start, months), paymentFrequency: "monthly" },
+    terms: { ...t, months, monthlyRent: rent, start, end: addMonths(start, months), paymentFrequency: "monthly", pricing, salesSharePct },
   })) as ContractSnapshot;
 }
 
@@ -133,14 +165,22 @@ export function requestContract(s: State, a: { shopId: string; slot: number; hol
   if (takenSlots(s, shop.id).has(a.slot)) fail("That shelf was just requested by someone else. Pick another.");
   if (!a.start || a.start < today()) fail("Start date can't be in the past.");
   const holder = holderOf(s, a.holderId);
+  const rent = rentOf(shop);
   const months = a.months ?? shop.terms.months;
+  if (months < shop.terms.months) fail(`${shop.name} rents shelves for at least ${shop.terms.months} months.`);
+  if (months > 36) fail("Rentals can run for up to 36 months.");
   const tokenId = uid("tok"); const contractId = uid("ctr");
-  const token: Token = { id: tokenId, shopId: shop.id, slot: a.slot, stage: "A", rent: shop.price, createdAt: nowIso(), holderId: holder.id, contractId, sold: 0, revenue: 0, sales: [] };
+  const token: Token = { id: tokenId, shopId: shop.id, slot: a.slot, stage: "A", rent, createdAt: nowIso(), holderId: holder.id, contractId, sold: 0, revenue: 0, sales: [] };
   s.tokens.push(token);
-  const v: ContractVersion = { v: 1, kind: "original", createdAt: nowIso(), snapshot: snapshot(s, shop, token, holder, a.start, months, shop.price), status: "awaiting" };
+  const v: ContractVersion = { v: 1, kind: "original", createdAt: nowIso(), snapshot: snapshot(s, shop, token, holder, a.start, months, rent), status: "awaiting" };
   const c: Contract = { id: contractId, ref: nextRef(s, "CTR"), tokenId, shopId: shop.id, holderId: holder.id, versions: [v], createdAt: nowIso() };
   s.contracts.push(c);
   audit(s, ROLE_LABEL.holder, "contract.requested", c.ref, `${holder.name} requested ${shelfLabel(shop, a.slot)} at ${shop.name}, v1 snapshot frozen`);
+  if (shop.listing.instantBook) {
+    // Instant book: the owner agreed to the standard terms when listing, so their side is recorded now.
+    v.ownerSig = { name: shop.ownerName, at: nowIso(), via: "instant" };
+    audit(s, "System", "contract.instant_book", c.ref, `${shop.name} uses Instant book; owner pre-agreement recorded on v1`);
+  }
   notify(s, "owner", "New shelf rental request", `${holder.name} requested ${shelfLabel(shop, a.slot)} at ${shop.name}. Review and sign.`, `/contracts/${c.id}`);
   notify(s, "admin", "Contract awaiting approval", `${c.ref} for ${shop.name} needs platform review.`, `/contracts/${c.id}`);
   notify(s, "holder", "Contract created", `${c.ref} is waiting for admin approval and both signatures.`, `/contracts/${c.id}`);
@@ -203,7 +243,8 @@ function maybeExecute(s: State, c: Contract, v: ContractVersion) {
   if (t.deposit > 0 && !s.invoices.some((i) => i.contractId === c.id && i.kind === "deposit" && !i.voidedAt)) {
     s.invoices.push({ id: uid("inv"), ref: nextRef(s, "RNT"), contractId: c.id, version: v.v, kind: "deposit", label: "Security deposit", amount: t.deposit, tax: 0, total: t.deposit, dueDate: t.start });
   }
-  for (let i = 0; i < t.months; i++) {
+  // Share-of-sales contracts have no fixed rent, so no monthly rent invoices.
+  for (let i = 0; i < (t.monthlyRent > 0 ? t.months : 0); i++) {
     const due = addDays(addMonths(t.start, i), 5);
     if (v.kind === "amendment" && due < today()) continue;
     const tax = round2((t.monthlyRent * t.taxRate) / 100);
@@ -220,10 +261,11 @@ export function newVersion(s: State, contractId: string, kind: Extract<VersionKi
   if (awaitingVersion(c)) fail("A version is already awaiting signatures. Finish or reject it first.");
   const ex = executedVersion(c) ?? fail("Only an executed contract can be renewed or amended.");
   if (a.months < 1 || a.months > 36) fail("Duration must be 1–36 months.");
-  if (a.monthlyRent <= 0) fail("Rent must be above zero.");
+  if (a.monthlyRent < 0 || (a.monthlyRent === 0 && ex.snapshot.terms.pricing !== "share")) fail("Rent must be above zero.");
+  if (a.monthlyRent > 0 && ex.snapshot.terms.pricing === "share") fail("This contract is share of sales only, so it has no fixed rent.");
   const shop = shopOf(s, c.shopId); const token = tokenOf(s, c.tokenId);
   const start = kind === "renewal" ? ex.snapshot.terms.end : (ex.snapshot.terms.start > today() ? ex.snapshot.terms.start : today());
-  const terms: RentalTerms = { ...ex.snapshot.terms };
+  const terms = { ...ex.snapshot.terms };
   const snap = snapshot(s, shop, token, holderOf(s, c.holderId), start, a.months, a.monthlyRent, terms);
   const v: ContractVersion = { v: c.versions.length + 1, kind, createdAt: nowIso(), snapshot: snap, status: "awaiting", note: a.note || undefined };
   c.versions.push(v);
@@ -401,10 +443,13 @@ export function authorize(s: State, listingId: string, qty: number, decline: boo
   const commission = round2((subtotal * PLATFORM_COMMISSION_PCT) / 100);
   const fee = CUSTOMER_SERVICE_FEE;
   const gross = round2(subtotal + tax + fee);
+  const ct = executedVersion(c)?.snapshot.terms;
+  const sharePct = ct && ct.pricing && ct.pricing !== "fixed" ? ct.salesSharePct ?? 0 : 0;
+  const shopShare = round2((subtotal * sharePct) / 100);
   const id = uid("ord");
   const o: Order = {
     id, ref: nextRef(s, "ORD"), listingId: l.id, tokenId: l.tokenId, shopId: l.shopId, holderId: l.holderId, contractId: c.id,
-    productName: l.name, sku: l.sku, qty, unit: l.retail, subtotal, tax, taxRate: l.taxRate, serviceFee: fee, commission, gross, net: round2(subtotal - commission),
+    productName: l.name, sku: l.sku, qty, unit: l.retail, subtotal, tax, taxRate: l.taxRate, serviceFee: fee, commission, gross, net: round2(subtotal - commission - shopShare), shopShare, sharePct,
     payment: decline ? "failed" : "authorized", payout: "none", simRef: `SIMULATED-${String(s.seq).padStart(5, "0")}`, customerLabel: `Customer #${String(s.seq).padStart(4, "0")}`,
     createdAt: nowIso(), stockDeducted: false,
   };
@@ -444,6 +489,7 @@ export function capture(s: State, orderId: string) {
   ledger(s, { ...base, type: "capture_gross", amount: o.gross, memo: "Simulated capture (customer paid)" });
   ledger(s, { ...base, type: "tax_collected", amount: o.tax, memo: `Illustrative tax ${o.taxRate}%` });
   ledger(s, { ...base, type: "platform_fee", amount: round2(o.commission + o.serviceFee), memo: `Commission ${PLATFORM_COMMISSION_PCT}% + service fee` });
+  if (o.shopShare) ledger(s, { ...base, type: "shop_share", amount: o.shopShare, memo: `Store owner's ${o.sharePct}% share of sales — settles with the payout` });
   ledger(s, { ...base, type: "holder_payable", amount: o.net, memo: "Net due to token holder — payout pending, not settled" });
   audit(s, ROLE_LABEL.customer, "payment.captured", o.ref, `Stock −${o.qty} (${l.sku}); payout pending`);
   notify(s, "customer", "Receipt ready", `${o.ref}: ${o.qty} × ${o.productName}. Simulated payment captured.`, `/orders/${o.id}`);
@@ -492,6 +538,7 @@ export function decideRefund(s: State, orderId: string, approve: boolean, restoc
   ledger(s, { ...base, type: "refund_gross", amount: -o.gross, memo: "Full refund to customer (simulated)" });
   ledger(s, { ...base, type: "tax_reversed", amount: -o.tax, memo: "Tax reversed" });
   ledger(s, { ...base, type: "platform_fee_reversed", amount: -round2(o.commission + o.serviceFee), memo: "Fees reversed" });
+  if (o.shopShare) ledger(s, { ...base, type: "shop_share_reversed", amount: -o.shopShare, memo: "Store owner's share reversed" });
   ledger(s, { ...base, type: "holder_payable_reversed", amount: -o.net, memo: "Holder net reversed" });
   if (o.payout === "pending" || o.payout === "failed") {
     o.payout = "reversed";
@@ -499,6 +546,10 @@ export function decideRefund(s: State, orderId: string, approve: boolean, restoc
   } else if (o.payout === "settled") {
     ledger(s, { ...base, type: "holder_recovery", amount: o.net, financial: false, memo: "Already settled — amount owed back by holder" });
     notify(s, "holder", "Refund after settlement", `${o.ref}: ${o.net.toFixed(2)} USD will be offset against future payouts (simulated).`, "/dashboard?tab=money");
+    if (o.shopShare) {
+      ledger(s, { ...base, type: "shop_recovery", amount: o.shopShare, financial: false, memo: "Shop share already settled — amount owed back by store owner" });
+      notify(s, "owner", "Refund after settlement", `${o.ref}: your ${o.shopShare.toFixed(2)} USD share will be offset against future payouts (simulated).`, "/owner-dashboard?tab=rent");
+    }
   }
   o.payment = "refunded"; o.refundedAt = nowIso();
   o.refund.status = "approved"; o.refund.decidedAt = nowIso(); o.refund.restocked = restock; o.refund.note = note || undefined;
@@ -535,13 +586,17 @@ export function confirmPayout(s: State, orderId: string, success: boolean) {
     if (s.ledger.some((e) => e.orderId === o.id && e.type === "payout_settled")) fail("Settlement already recorded.");
     o.payout = "settled"; o.settledAt = nowIso();
     ledger(s, { ...base, type: "payout_settled", amount: o.net, memo: "Simulated provider confirmed settlement" });
+    if (o.shopShare) {
+      ledger(s, { ...base, type: "shop_payout_settled", amount: o.shopShare, memo: "Store owner's share settled (simulated)" });
+      notify(s, "owner", "Share of sales settled", `${o.ref}: ${o.shopShare.toFixed(2)} USD settled to you (simulated).`, "/owner-dashboard?tab=rent");
+    }
     notify(s, "holder", "Settlement completed", `${o.ref}: ${o.net.toFixed(2)} USD settled (simulated).`, "/dashboard?tab=money");
   } else {
     o.payout = "failed"; o.payoutFailedAt = nowIso();
     ledger(s, { ...base, type: "payout_failed", amount: 0, financial: false, memo: "Simulated provider reported failure" });
     notify(s, "holder", "Settlement failed", `${o.ref}: simulated provider failure. It can be retried.`, "/dashboard?tab=money");
   }
-  audit(s, `${ROLE_LABEL.admin} (simulated provider)`, success ? "payout.settled" : "payout.failed", o.ref, `${o.net} USD`);
+  audit(s, `${ROLE_LABEL.admin} (simulated provider)`, success ? "payout.settled" : "payout.failed", o.ref, `${o.net} USD to holder${o.shopShare ? `, ${o.shopShare} USD to store owner` : ""}`);
 }
 
 export function markRead(s: State, role: Role, id?: string) {
@@ -550,3 +605,16 @@ export function markRead(s: State, role: Role, id?: string) {
 
 export const _internal = { ledger, nextRef, snapshot };
 export type { LedgerType };
+
+// ---------- marketplace ----------
+export function toggleSaved(s: State, shopId: string) {
+  shopOf(s, shopId);
+  s.saved = s.saved.includes(shopId) ? s.saved.filter((x) => x !== shopId) : [...s.saved, shopId];
+}
+
+export function reportShop(s: State, shopId: string, reason: string) {
+  const shop = shopOf(s, shopId);
+  if (!reason.trim()) fail("Say briefly what's wrong with this listing.");
+  audit(s, ROLE_LABEL[s.role], "store.reported", shopId, `${shop.name}: ${reason.trim()}`);
+  notify(s, "admin", "Listing reported", `${shop.name}: ${reason.trim()}`, "/admin?tab=stores");
+}

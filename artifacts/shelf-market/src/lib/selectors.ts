@@ -86,7 +86,17 @@ export function holderMoney(s: State, holderId?: string) {
   const fees = sum(["platform_fee", "platform_fee_reversed"]);
   const tax = sum(["tax_collected", "tax_reversed"]);
   const rentPaid = sum(["rent_paid", "deposit_paid"]);
-  return { payable, settled, processing, pending, recovery, gross, fees, tax, rentPaid };
+  const shopShare = sum(["shop_share", "shop_share_reversed"]);
+  return { payable, settled, processing, pending, recovery, gross, fees, tax, rentPaid, shopShare };
+}
+
+/** A store owner's share-of-sales earnings across the given shops. */
+export function shopShareMoney(s: State, shopIds: string[]) {
+  const L = s.ledger.filter((e) => shopIds.includes(e.shopId));
+  const sum = (t: string[]) => round2(L.filter((e) => t.includes(e.type)).reduce((a, e) => a + e.amount, 0));
+  const earned = sum(["shop_share", "shop_share_reversed"]);
+  const settled = sum(["shop_payout_settled"]);
+  return { earned, settled, unsettled: round2(Math.max(0, earned - settled)), recovery: round2(Math.max(0, settled - earned)) };
 }
 
 export interface RecCheck { orderRef: string; orderId: string; ok: boolean; note: string; }
@@ -95,9 +105,12 @@ export function reconcile(s: State): RecCheck[] {
     const L = s.ledger.filter((e) => e.orderId === o.id);
     const t = (k: string) => round2(L.filter((e) => e.type === k).reduce((a, e) => a + e.amount, 0));
     const issues: string[] = [];
-    const parts = round2(t("tax_collected") + t("platform_fee") + t("holder_payable"));
+    const parts = round2(t("tax_collected") + t("platform_fee") + t("shop_share") + t("holder_payable"));
+    const share = round2(o.shopShare ?? 0);
     if (round2(t("capture_gross")) !== round2(o.gross)) issues.push("captured gross differs from order");
-    if (parts !== round2(t("capture_gross"))) issues.push("gross does not split into tax + fee + net");
+    if (parts !== round2(t("capture_gross"))) issues.push("gross does not split into tax + fee + shop share + net");
+    if (round2(t("shop_share")) !== share) issues.push("shop share differs from order");
+    if (o.payout === "settled" && round2(t("shop_payout_settled")) !== share) issues.push("shop share not settled with the payout");
     if (round2(t("holder_payable")) !== round2(o.net)) issues.push("holder payable differs from order net");
     if (L.filter((e) => e.type === "payout_settled").length > 1) issues.push("more than one settlement recorded");
     if (o.payout === "settled" && t("payout_settled") !== round2(o.net)) issues.push("settled amount differs from net");

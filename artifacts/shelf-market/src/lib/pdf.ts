@@ -39,6 +39,7 @@ export function downloadContractPdf(c: Contract, v: ContractVersion, audit: Audi
   const t = s.terms;
   line(`Term: ${t.start} to ${t.end} (${t.months} months) · renewal: ${t.renewal}`);
   line(`Rent: USD ${t.monthlyRent.toFixed(2)} per month, paid monthly, due 5 days after each period start · illustrative tax ${t.taxRate}% · deposit USD ${t.deposit.toFixed(2)}`);
+  line(`Share of sales: ${t.pricing === "share" ? `share of sales only: the store keeps ${t.salesSharePct}% of each sale (before tax), no fixed rent` : t.pricing === "hybrid" ? `plus ${t.salesSharePct}% of each sale (before tax) kept by the store` : "fixed rent only"}.`);
   line(`Late payment: ${t.lateFeePct}% after ${t.graceDays} grace days (illustrative).`);
   line(`Maintenance: ${t.maintenance}`);
   line(`Display & stock: ${t.display}`);

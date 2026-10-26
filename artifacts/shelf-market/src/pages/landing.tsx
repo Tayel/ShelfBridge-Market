@@ -6,7 +6,7 @@ import { Shell } from "@/components/shell";
 const base = import.meta.env.BASE_URL;
 
 const JOURNEYS = [
-  { href: "/owner", img: `${base}images/owner.png`, title: "I have a shop", sub: "Rent out a few empty shelves.", cta: "Apply as store owner", id: "owner" },
+  { href: "/host", img: `${base}images/owner.png`, title: "I have a shop", sub: "Rent out a few empty shelves.", cta: "Apply as store owner", id: "owner" },
   { href: "/explore", img: `${base}images/holder.png`, title: "I make things", sub: "Hold a shelf token, stock it, sell.", cta: "Apply to hold a token", id: "holder" },
 ];
 

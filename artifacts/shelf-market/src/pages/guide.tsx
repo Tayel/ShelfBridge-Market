@@ -42,6 +42,9 @@ export default function Guide() {
             <li>Real, scannable shelf QR codes linked to <code>/catalog/&lt;shelf&gt;</code>; authorize → capture (or decline/cancel); only capture deducts stock, once.</li>
             <li>Append-only ledger, payout states (pending → processing → settled/failed) that only settle on a simulated provider confirmation, full refunds with optional restock, reconciliation and CSV export.</li>
             <li>In-app notifications for key events, per role, read/unread.</li>
+            <li>Marketplace search: where / start / length / product, quick filters and a full filter panel, a schematic map with price pins, saved shelves, ratings with six sub-scores, Instant book, owner response stats, cancellation policies and listing reports.</li>
+            <li>Photos: a gallery on every shelf page and a cover photo on search cards. New listings must include a photo of the shelf and of the shop front; photos are resized in the browser and can be retaken in shop settings. Sample stores use real stock photos of similar shops, labelled as such.</li>
+            <li>A host page with an earnings estimate, and a three-phase listing wizard with shelf type, foot traffic, pricing model (rent, share of sales or both) and a saved draft.</li>
           </ul>
         </Card>
         <Card className="border-destructive/30">
@@ -54,6 +57,17 @@ export default function Guide() {
             <li><b>No security.</b> No real authentication, roles or access control. Don't enter real personal, identity or bank data.</li>
             <li><b>One browser only.</b> Data is saved in this browser's localStorage. Other devices (e.g. a phone scanning a QR) see their own copy — there is no server and no multi-device sync. Open tabs refresh each other, and each action re-checks the latest saved state, but this is not production-safe concurrency.</li>
             <li><b>No messaging.</b> Notifications are in-app only; no email or SMS.</li>
+            <li><b>Sample trust data.</b> Reviews, ratings, response rates and foot traffic on sample stores are made up. Share-of-sales terms are frozen into each contract when it is requested; the store's cut is taken from each sale, settled with the maker's payout and reversed on refunds.</li>
+          </ul>
+        </Card>
+        <Card testId="card-compliance">
+          <p className="font-display text-xl font-bold">Before real money moves</p>
+          <p className="mt-1 text-sm text-muted-foreground">A live version with a token, stablecoin settlement and a payout on every sale would need, at least:</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            <li><b>Token rules.</b> In the UAE, a review of whether the shelf token or any payment token falls under VARA rules, and the matching rules in each other market.</li>
+            <li><b>KYB on both sides.</b> Business checks on every shop and every maker before a contract can start, not just a registration number.</li>
+            <li><b>Payout screening.</b> Sanctions and watchlist screening of everyone who receives a payout, plus monitoring of sales and refunds for unusual patterns.</li>
+            <li><b>Escrow and deposits.</b> Deposits held by a licensed provider, not by the platform's own wallet.</li>
           </ul>
         </Card>
         <Card>

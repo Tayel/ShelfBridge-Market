@@ -41,7 +41,8 @@ export default function Dashboard() {
   const commission = round2(orders.filter((o) => o.payment === "captured").reduce((a, o) => a + o.commission, 0));
   const legacy = round2(listings.reduce((a, l) => a + (l.legacyRevenue ?? 0), 0));
   const stockCost = round2(listings.reduce((a, l) => a + l.cost * l.initialQty, 0));
-  const profit = round2(sales - commission + legacy - money.rentPaid - stockCost);
+  const shopShare = money.shopShare;
+  const profit = round2(sales - commission - shopShare + legacy - money.rentPaid - stockCost);
   const due = round2(invoices.filter((i) => ["due", "overdue"].includes(invoiceStatus(i))).reduce((a, i) => a + i.total + lateFeeFor(st, i), 0));
 
   return (
@@ -123,7 +124,7 @@ export default function Dashboard() {
           {orders.map((o) => (
             <Card key={o.id} className="flex flex-wrap items-center gap-3 py-3" testId={`row-order-${o.id}`}>
               <div className="min-w-0 flex-1"><p className="font-medium">{o.qty} × {o.productName}</p><p className="text-xs text-muted-foreground">{o.ref} · {fmtTime(o.createdAt)} · {o.customerLabel}</p></div>
-              <span className="text-sm tabular-nums">net {usd(o.net)}</span>
+              <span className="text-sm tabular-nums">{o.shopShare ? <span className="text-muted-foreground">shop {o.sharePct}% {usd(o.shopShare)} · </span> : null}net {usd(o.net)}</span>
               <Pill>{o.payment}</Pill>
               {o.payout !== "none" && <Pill tone={o.payout === "settled" ? "good" : o.payout === "reversed" || o.payout === "failed" ? "bad" : "warn"}>payout {o.payout}</Pill>}
               {o.refund?.status === "requested" && <Pill tone="warn">refund requested</Pill>}
@@ -138,7 +139,7 @@ export default function Dashboard() {
           <div className="rounded-[2rem] border border-border p-8 text-center">
             <p className="text-sm text-muted-foreground">Simulated profit</p>
             <p className={`font-display text-6xl font-bold tabular-nums ${profit >= 0 ? "text-secondary-foreground" : "text-primary"}`} data-testid="text-profit">{usd(profit)}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Sales {usd(sales)} − commission {usd(commission)}{legacy ? ` + earlier demo sales ${usd(legacy)}` : ""} − rent paid {usd(money.rentPaid)} − stock cost {usd(stockCost)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Sales {usd(sales)} − commission {usd(commission)}{shopShare ? ` − shops' share of sales ${usd(shopShare)}` : ""}{legacy ? ` + earlier demo sales ${usd(legacy)}` : ""} − rent paid {usd(money.rentPaid)} − stock cost {usd(stockCost)}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             <Stat label="Payable to you" value={usd(money.payable)} sub="from ledger, after refunds" testId="text-payable" />

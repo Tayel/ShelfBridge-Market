@@ -31,6 +31,8 @@ export const actions = {
   decideRefund: (orderId: string, approve: boolean, restock: boolean, note: string) => run((d) => ops.decideRefund(d, orderId, approve, restock, note)),
   requestPayout: (orderId: string, actor: Role) => run((d) => ops.requestPayout(d, orderId, actor)),
   confirmPayout: (orderId: string, ok: boolean) => run((d) => ops.confirmPayout(d, orderId, ok)),
+  toggleSaved: (shopId: string) => run((d) => ops.toggleSaved(d, shopId)),
+  reportShop: (shopId: string, reason: string) => run((d) => ops.reportShop(d, shopId, reason)),
   markRead: (role: Role, id?: string) => run((d) => ops.markRead(d, role, id)),
   reset: resetDemo,
 };

@@ -19,7 +19,7 @@ function SigRow({ label, sig, testId }: { label: string; sig?: Signature; testId
       <span className={`grid h-8 w-8 place-items-center rounded-full ${sig ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>{sig ? <Check className="h-4 w-4" /> : <SigIcon className="h-4 w-4" />}</span>
       <div className="min-w-0 flex-1">
         <p className="font-medium">{label}</p>
-        <p className="truncate text-xs text-muted-foreground">{sig ? `“${sig.name}” · ${fmtTime(sig.at)} · ${sig.via === "ui" ? "typed in this browser" : sig.via === "seed" ? "sample seed data" : "simulated"}` : "Not recorded yet"}</p>
+        <p className="truncate text-xs text-muted-foreground">{sig ? `“${sig.name}” · ${fmtTime(sig.at)} · ${sig.via === "ui" ? "typed in this browser" : sig.via === "seed" ? "sample seed data" : sig.via === "instant" ? "pre-agreed via Instant book" : "simulated"}` : "Not recorded yet"}</p>
       </div>
     </div>
   );
@@ -37,6 +37,7 @@ function Snapshot({ v }: { v: ContractVersion }) {
     ["Categories", s.shelf.categories.map(categoryLabel).join(", ")],
     ["Term", `${fmtDate(t.start)} → ${fmtDate(t.end)} (${t.months} mo) · renewal ${t.renewal}`],
     ["Rent", `${usd(t.monthlyRent)}/mo monthly + ${t.taxRate}% illustrative tax · deposit ${usd(t.deposit)}`],
+    ["Share of sales", t.pricing === "share" ? `share of sales only: the store keeps ${t.salesSharePct}% of each sale (before tax), no fixed rent` : t.pricing === "hybrid" ? `plus ${t.salesSharePct}% of each sale (before tax) kept by the store` : "fixed rent only"],
     ["Late payment", `${t.lateFeePct}% after ${t.graceDays} days`],
     ["Maintenance", t.maintenance], ["Display & stock", t.display], ["Liability", t.liability], ["Disputes", t.dispute],
   ];

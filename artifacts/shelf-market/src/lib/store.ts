@@ -26,7 +26,11 @@ function normalize(raw: Partial<State>): State {
   const s: State = {
     ...base,
     role: (["owner", "holder", "customer", "admin"] as Role[]).includes(raw.role as Role) ? (raw.role as Role) : "holder",
-    shops: arr<Shop>(raw.shops).filter((x) => x && x.id).map((x) => shopDefaults(x)),
+    // Seeded shops saved before listing attributes or photos existed pick them up from the seed.
+    shops: arr<Shop>(raw.shops).filter((x) => x && x.id).map((x) => {
+      const seed = x.seeded ? SEED_SHOPS.find((y) => y.id === x.id) : undefined;
+      return shopDefaults({ ...x, listing: x.listing ?? seed?.listing, photos: x.photos ?? seed?.photos });
+    }),
     tokens: arr<Token>(raw.tokens).filter((t) => t && t.id),
     holders: arr(raw.holders),
     contracts: arr(raw.contracts),
@@ -36,6 +40,7 @@ function normalize(raw: Partial<State>): State {
     ledger: arr(raw.ledger),
     notifications: arr(raw.notifications),
     audit: arr(raw.audit),
+    saved: arr<string>(raw.saved).filter((x) => typeof x === "string"),
     seq: typeof raw.seq === "number" ? raw.seq : 0,
     migratedFromV1: raw.migratedFromV1,
   };

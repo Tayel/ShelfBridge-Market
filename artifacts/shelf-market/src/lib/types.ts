@@ -26,6 +26,40 @@ export interface Shop {
   status: ShopStatus; statusNote?: string;
   shelf: ShelfSpec; terms: RentalTerms; floorNote: string;
   createdAt: string; legacy?: boolean;
+  // Marketplace listing attributes (search, filters, trust)
+  listing: ShopListing;
+  photos: ShopPhoto[];
+}
+
+export type PhotoKind = "front" | "inside" | "shelf";
+export interface ShopPhoto {
+  url: string; // https URL, or a compressed data URL for photos uploaded in this browser
+  kind: PhotoKind;
+  caption?: string;
+  source: "owner" | "stock"; // stock = real photo of a similar shop, used for sample stores
+  addedAt: string;
+}
+
+export type ShelfType = "eye-level" | "endcap" | "checkout" | "fridge" | "window";
+export type PricingModel = "fixed" | "share" | "hybrid";
+export type CancellationPolicy = "flexible" | "moderate" | "strict";
+export type AccessTier = "open" | "premium";
+
+export interface ShopListing {
+  shelfType: ShelfType;
+  footTraffic: number; // shoppers per day, owner-declared
+  features: string[]; // ids from FEATURES
+  instantBook: boolean; // owner pre-agrees to the standard terms
+  pricing: PricingModel;
+  salesSharePct: number; // used when pricing is "share" or "hybrid"
+  cancellation: CancellationPolicy;
+  access: AccessTier;
+  responseRate: number; // %
+  responseHours: number;
+  ownerSince: number; // year
+  sellsWell: string;
+  nearby: string[];
+  geo?: [number, number]; // lat, lng
 }
 
 export type TokenStage = "A" | "requested" | "approved" | "rejected" | "B";
@@ -46,13 +80,17 @@ export interface Holder {
   seeded: boolean;
 }
 
-export interface Signature { name: string; at: string; via: "ui" | "simulated" | "seed"; }
+export interface Signature { name: string; at: string; via: "ui" | "simulated" | "seed" | "instant"; }
 
 export interface ContractSnapshot {
   store: { id: string; name: string; address: string; city: string; country: string; registration: string; ownerName: string };
   shelf: { tokenId: string; slot: number; label: string; count: number; spec: ShelfSpec; areaCm2: number; floorNote: string; categories: string[]; restrictions: string[] };
   holder: { id: string; name: string; kind: string; registration: string };
-  terms: RentalTerms & { monthlyRent: number; start: string; end: string; paymentFrequency: "monthly" };
+  terms: RentalTerms & {
+    monthlyRent: number; start: string; end: string; paymentFrequency: "monthly";
+    // Frozen from the listing at request time. Missing on contracts made before pricing models existed (= fixed).
+    pricing?: PricingModel; salesSharePct?: number;
+  };
 }
 
 export type VersionKind = "original" | "renewal" | "amendment" | "migrated";
@@ -99,6 +137,7 @@ export interface Order {
   id: string; ref: string; listingId: string; tokenId: string; shopId: string; holderId: string; contractId: string;
   productName: string; sku: string;
   qty: number; unit: number; subtotal: number; tax: number; taxRate: number; serviceFee: number; commission: number; gross: number; net: number;
+  shopShare?: number; sharePct?: number; // store owner's cut under a share-of-sales contract (absent on older orders)
   payment: PaymentState; payout: PayoutState;
   simRef: string; customerLabel: string;
   createdAt: string; authorizedAt?: string; capturedAt?: string; failedAt?: string; cancelledAt?: string;
@@ -112,7 +151,8 @@ export type LedgerType =
   | "capture_gross" | "tax_collected" | "platform_fee" | "holder_payable"
   | "payout_initiated" | "payout_settled" | "payout_failed"
   | "refund_gross" | "tax_reversed" | "platform_fee_reversed" | "holder_payable_reversed" | "payout_reversed" | "holder_recovery"
-  | "rent_paid" | "deposit_paid";
+  | "rent_paid" | "deposit_paid"
+  | "shop_share" | "shop_share_reversed" | "shop_payout_settled" | "shop_recovery";
 
 export interface LedgerEntry {
   id: string; seq: number; at: string; type: LedgerType; amount: number; financial: boolean;
@@ -131,6 +171,7 @@ export interface State {
   contracts: Contract[]; invoices: RentInvoice[];
   listings: Listing[]; orders: Order[]; ledger: LedgerEntry[];
   notifications: Notice[]; audit: AuditEntry[];
+  saved: string[]; // shop ids on the viewer's wishlist
   seq: number;
   migratedFromV1?: string;
 }

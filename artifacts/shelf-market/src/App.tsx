@@ -22,6 +22,8 @@ import Admin from '@/pages/admin';
 import Notifications from '@/pages/notifications';
 import Guide from '@/pages/guide';
 import Support from '@/pages/support';
+import Host from '@/pages/host';
+import Saved from '@/pages/saved';
 import {
   Route,
   Switch,
@@ -38,7 +40,9 @@ function Router() {
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={Landing} />
+        <Route path="/host" component={Host} />
         <Route path="/owner" component={Owner} />
+        <Route path="/saved" component={Saved} />
         <Route path="/explore" component={Explore} />
         <Route path="/explore/:id" component={ShopDetail} />
         <Route path="/stock/:tokenId" component={Stock} />

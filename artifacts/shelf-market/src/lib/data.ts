@@ -92,3 +92,41 @@ export const PRODUCTS: Product[] = [
 export const SHELF_CAPACITY = 40; // legacy default units per shelf (illustrative)
 
 export const SWATCHES = ["#B5834A", "#5E8FA8", "#C8412E", "#2F5E9E", "#D9799A", "#2C7DA0", "#8A5A3C", "#A9825A", "#9DB79A", "#E9A23B"];
+
+export const SHELF_TYPES: { id: import("./types").ShelfType; label: string; hint: string }[] = [
+  { id: "eye-level", label: "Eye-level", hint: "At the shopper's eye line on a main aisle" },
+  { id: "endcap", label: "Endcap", hint: "End of an aisle, seen from two directions" },
+  { id: "checkout", label: "By the till", hint: "Next to the checkout counter" },
+  { id: "fridge", label: "Fridge", hint: "Chilled cabinet space" },
+  { id: "window", label: "Window display", hint: "Street-facing window" },
+];
+export const shelfTypeLabel = (id: string) => SHELF_TYPES.find((t) => t.id === id)?.label ?? id;
+
+export const FEATURES = [
+  { id: "chilled", label: "Chilled storage" },
+  { id: "cctv", label: "CCTV" },
+  { id: "restock", label: "Shop restocks for you" },
+  { id: "pos", label: "Sales logged at the till" },
+];
+export const featureLabel = (id: string) => FEATURES.find((f) => f.id === id)?.label ?? id;
+
+export const PRICING_LABEL = { fixed: "Fixed rent", share: "Share of sales", hybrid: "Rent + share of sales" } as const;
+
+export const CANCELLATION = {
+  flexible: { label: "Flexible", text: "Free to cancel any time before the contract is signed, then 30 days' notice." },
+  moderate: { label: "Moderate", text: "Free to cancel before signing. After that, 60 days' notice." },
+  strict: { label: "Strict", text: "Free to cancel before signing. After that, the rental runs to the end of the term." },
+} as const;
+
+/** Rough city centres for the schematic map. Unknown cities fall back to the country. */
+export const CITY_GEO: Record<string, [number, number]> = {
+  Cairo: [30.05, 31.24], Alexandria: [31.2, 29.92], Lisbon: [38.72, -9.14], Porto: [41.15, -8.61],
+  Budapest: [47.5, 19.04], Istanbul: [41.01, 28.98], Ankara: [39.93, 32.86], Dubai: [25.2, 55.27], "Abu Dhabi": [24.45, 54.38],
+};
+export const COUNTRY_GEO: Record<string, [number, number]> = {
+  EG: [28.5, 30.8], PT: [39.5, -8], HU: [47.2, 19.5], TR: [39, 34], AE: [24.4, 54.4],
+  KE: [-1.3, 36.8], JP: [35, 135.7], MX: [17, -96.7], DE: [52.5, 13.4], IN: [22, 78], CA: [45.4, -75.7],
+};
+
+/** Illustrative stand-ins for a real currency/token layer. */
+export const PREMIUM_TOKEN_NOTE = "Premium shelves need a Gold-tier token. Token tiers are illustrative in this demo.";

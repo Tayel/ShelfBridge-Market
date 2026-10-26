@@ -14,8 +14,8 @@ import type { Role } from "@/lib/types";
 const HOME: Record<Role, string> = { owner: "/owner-dashboard", holder: "/dashboard", customer: "/scan", admin: "/admin" };
 
 const MENU: { group: string; items: { href: string; label: string }[] }[] = [
-  { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/owner", label: "List a new shop" }] },
-  { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/explore", label: "Find a shelf" }] },
+  { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/host", label: "List a new shop" }] },
+  { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/explore", label: "Find a shelf" }, { href: "/saved", label: "Saved shelves" }] },
   { group: "Customer", items: [{ href: "/scan", label: "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
   { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: "Demo guide & limits" }] },
 ];
