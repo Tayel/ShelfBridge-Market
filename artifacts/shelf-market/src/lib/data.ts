@@ -57,8 +57,113 @@ export const categoryLabel = (id: string) => CATEGORIES.find((c) => c.id === id)
 export const EXPIRING_WINDOW_DAYS = 45;
 export const OFFERS = [
   { id: "expiring", title: "About to expire", tagline: "Good food from factories, close to its date.", sub: "Factories place stock that expires soon on neighbourhood shelves, at a lower price, so it sells instead of going to waste.", cta: "See near-date deals" },
-  { id: "flying", title: "About to fly", tagline: "Local souvenirs that carry a place's culture.", sub: "Domestic makers stock small, packable pieces of their city, so visitors take home something made where they stood.", cta: "See local souvenirs" },
+  { id: "flying", title: "About to Fly Inside", tagline: "National products from local manufacturers, at the airport.", sub: "A group-funded \"Made in Our Country\" shelf in airport shops: participants pool funds, source from local manufacturers, sell to travellers and share the rewards.", cta: "See airport shelves" },
 ] as const;
+export type ProductId = (typeof OFFERS)[number]["id"];
+export const isProductId = (x: unknown): x is ProductId => x === "expiring" || x === "flying";
+
+/**
+ * The two products the marketplace is built around, with everything the journey shows about them:
+ * the explanation image (the product's own one-pager), the four steps, and the copy for shop owners
+ * ("Your empty shelves could earn") and for token holders ("Find a shelf").
+ */
+export const PRODUCT_JOURNEY: Record<ProductId, {
+  title: string; headline: [string, string]; summary: string; image: string; illustration: string; imageAlt: string;
+  steps: { title: string; text: string }[]; motto: string; pillars: string[];
+  owner: { pitch: string; who: string; promises: { title: string; text: string }[]; faq: [string, string][]; cta: string };
+  holder: { title: string; pitch: string; who: string; promises: { title: string; text: string }[]; cta: string };
+}> = {
+  expiring: {
+    title: "About to Expire",
+    headline: ["Sell Closer,", "Waste Never."],
+    summary: "Local factories place soon-to-expire stock on neighbourhood shelves at lower prices, turning waste into shared value.",
+    image: "images/product-expire.jpg",
+    illustration: "images/near-date-grocery.jpg",
+    imageAlt: "About to Expire: a neighbourhood grocery with an About to Expire shelf, and the four steps — identify stock, price wisely, place locally, rescue and share.",
+    motto: "Source. Price. Place. Save.",
+    steps: [
+      { title: "Identify stock", text: "Factories identify goods close to their expiry date." },
+      { title: "Price wisely", text: "Discounts are applied so the stock sells fast." },
+      { title: "Place locally", text: "Products are stocked on neighbourhood shelves." },
+      { title: "Rescue & share", text: "Neighbours buy affordable food, and less goes to waste." },
+    ],
+    pillars: ["Empower communities", "Support local factories", "Affordable goods", "Zero waste"],
+    owner: {
+      pitch: "Host an About to Expire shelf: local factories fill it with near-date food and drinks at a discount, and your neighbours come in for the deals.",
+      who: "For neighbourhood groceries, minimarkets and pharmacies",
+      promises: [
+        { title: "Stock arrives priced to move", text: "Every batch shows its usual price crossed out and the days left, so it sells before its date." },
+        { title: "More reasons to come in", text: "Near-date deals bring neighbours back every week, and they buy your own products too." },
+        { title: "You approve every batch", text: "You see the expiry date of every batch before it goes on your shelf, and the factory collects anything unsold before it expires." },
+      ],
+      faq: [
+        ["What if stock reaches its date on my shelf?", "Batches must expire within 45 days and are listed with their date. The factory collects anything unsold before it expires; sales after the date are flagged to compliance."],
+        ["Who sets the discount?", "The factory sets the offer price and the usual price. Shoppers see both, so the saving is clear."],
+        ["Do I need a fridge?", "Only for chilled goods. Most near-date stock is packaged food and drinks that keep on an ordinary shelf."],
+        ["How do I get paid?", "Monthly rent, a share of each sale, or both — you choose. In this demo all payments are simulated."],
+      ],
+      cta: "List your shop for About to Expire",
+    },
+    holder: {
+      title: "Find a neighbourhood shelf for your near-date stock",
+      pitch: "Rent a shelf in a neighbourhood shop, stock it with products close to their date at a lower price, and sell them before they go to waste.",
+      who: "For factories and producers with short-dated stock",
+      promises: [
+        { title: "Recover value, not write-offs", text: "Sell stock you would otherwise destroy, at a discount you choose." },
+        { title: "Shops near the shoppers", text: "Only neighbourhood shops that take food or drinks are shown." },
+        { title: "Dates handled for you", text: "Each batch carries its expiry date; the shelf shows days left and you collect before the date." },
+      ],
+      cta: "Find a neighbourhood shelf",
+    },
+  },
+  flying: {
+    title: "About to Fly Inside",
+    headline: ["Together, We Retail", "at the Airport."],
+    summary: "A group-funded airport retail business that showcases national products, supports local manufacturers and shares the rewards.",
+    image: "images/product-fly-inside.jpg",
+    illustration: "images/airport-kiosk.jpg",
+    imageAlt: "About to Fly Inside: a Made in Our Country shop at an airport gate, and the four steps — group fund, source local, retail together, manage and share.",
+    motto: "Pool. Purchase. Showcase. Share the success.",
+    steps: [
+      { title: "Group fund", text: "Participants pool funds to rent shared display space in airport shops." },
+      { title: "Source local", text: "Products are bought together from local domestic manufacturers." },
+      { title: "Retail together", text: "National products are shown under one retail brand at airport shops." },
+      { title: "Manage & share", text: "Sales and proceeds are managed centrally and shared fairly." },
+    ],
+    pillars: ["Empower communities", "Support local manufacturers", "Showcase national products", "Share the rewards"],
+    owner: {
+      pitch: "Host a \"Made in Our Country\" shelf for travellers: a pool of participants rents it, stocks it with national products from local manufacturers, and sells under one brand.",
+      who: "For shops and kiosks inside airports",
+      promises: [
+        { title: "Rent from a group, paid up front", text: "Participants pool funds for the shelf, so rent doesn't depend on a single small maker." },
+        { title: "Products travellers want", text: "National products from vetted local manufacturers — the gifts people look for before they fly." },
+        { title: "One brand, one contact", text: "The shelf is run as one \"Made in Our Country\" display, with stock and sales managed centrally." },
+      ],
+      faq: [
+        ["Does it have to be airside?", "Any shop inside an airport terminal works — before or after security. Your airport's own retail rules still apply."],
+        ["Who decides what goes on the shelf?", "The group sources from local manufacturers; you approve every product before it goes on sale."],
+        ["How is the money shared?", "Sales are collected centrally; you receive rent (and a share of sales if you choose), and the rest is shared among the participants. Simulated in this demo."],
+        ["What about duty-free rules?", "This demo does not handle customs or duty-free licensing. Check with your airport operator."],
+      ],
+      cta: "List your airport shop",
+    },
+    holder: {
+      title: "Find a shelf at the airport",
+      pitch: "Join the retail community: hold a token in a group-funded airport shelf, stock it with national products from local manufacturers, and share in the sales.",
+      who: "For local manufacturers and community participants",
+      promises: [
+        { title: "Pool funds, share the space", text: "Airport space is costly alone; a token gives you a share of a shelf rented together." },
+        { title: "Made in Our Country", text: "Products must be made in the airport's country, each with the story of where it comes from." },
+        { title: "Sales shared fairly", text: "Sales and proceeds are managed centrally and paid out by token." },
+      ],
+      cta: "Find an airport shelf",
+    },
+  },
+};
+
+/** Which shops serve which product: airport shops for About to Fly Inside, neighbourhood food shops for About to Expire. */
+export const shopServes = (s: { venue?: string; categories: string[] }, p: ProductId) =>
+  p === "flying" ? s.venue === "airport" : s.venue !== "airport" && (s.categories.includes("food") || s.categories.includes("drinks"));
 export const offerTitle = (id?: string) => OFFERS.find((o) => o.id === id)?.title ?? "";
 
 export const RESTRICTIONS = [

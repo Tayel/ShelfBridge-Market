@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { Check } from "lucide-react";
+import { HowItWorks, JourneySteps, ProductSwitch, asset, useRequireProduct } from "@/components/product-bits";
 import { motion } from "framer-motion";
 import { Map as MapIcon, List, MapPin, SlidersHorizontal, Store, Users } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
@@ -8,7 +10,7 @@ import { coverOf } from "@/components/photos";
 import { Field, Modal, inputCls } from "@/components/kit";
 import { ListingBadges, Rating, SaveHeart, ShopMap, priceText } from "@/components/listing-bits";
 import { rentOf } from "@/lib/ops";
-import { BUSINESSES, CATEGORIES, FEATURES, PRICING_LABEL, SHELF_TYPES, countryName, shelfTypeLabel } from "@/lib/data";
+import { BUSINESSES, CATEGORIES, FEATURES, PRICING_LABEL, PRODUCT_JOURNEY, SHELF_TYPES, countryName, shelfTypeLabel, shopServes, type ProductId } from "@/lib/data";
 import { isFavourite } from "@/lib/reviews";
 import { slotsOf, takenSlots, useStore, usd } from "@/lib/store";
 import { today } from "@/lib/util";
@@ -51,8 +53,18 @@ function matches(s: Shop, f: Filters, where: string, what: string, months: numbe
 const activeCount = (f: Filters) =>
   [f.min || f.max, f.types.length, f.traffic, f.pricing.length, f.features.length, f.biz.length, f.instant, f.favourite, f.openOnly].filter(Boolean).length;
 
+/** What each product sells: near-date food and drinks; national products of any kind at the airport. */
+const PRODUCT_CATS: Record<ProductId, string[]> = { expiring: ["food", "drinks"], flying: ["food", "craft", "textile", "beauty"] };
+
 export default function Explore() {
+  const product = useRequireProduct("holder");
+  return product ? <ExploreFor product={product} key={product} /> : null;
+}
+
+function ExploreFor({ product }: { product: ProductId }) {
   const st = useStore();
+  const [, go] = useLocation();
+  const j = PRODUCT_JOURNEY[product];
   const [where, setWhere] = useState("all");
   const [start, setStart] = useState(today());
   const [months, setMonths] = useState(0);
@@ -63,17 +75,36 @@ export default function Explore() {
   const [showMap, setShowMap] = useState(false);
   const [active, setActive] = useState<string | null>(null);
 
-  const approved = useMemo(() => st.shops.filter((s) => s.status === "approved"), [st.shops]);
+  const approved = useMemo(() => st.shops.filter((s) => s.status === "approved" && shopServes(s, product)), [st.shops, product]);
   const cities = [...new Set(approved.map((s) => s.city))].sort();
   const shops = useMemo(() => approved.filter((s) => matches(s, f, where, what, months)), [approved, f, where, what, months]);
   const draftCount = approved.filter((s) => matches(s, draft, where, what, months)).length;
   const n = activeCount(f);
   const quick = (patch: Partial<Filters>) => setF((x) => ({ ...x, ...patch }));
-  const qs = `?start=${start}${months ? `&months=${months}` : ""}`;
+  const qs = `?start=${start}${months ? `&months=${months}` : ""}&product=${product}`;
 
   return (
-    <Shell title="Find a shelf" back="/">
-      <h1 className="font-display text-center text-4xl font-bold md:text-5xl">Find a shelf</h1>
+    <Shell title={`Find a shelf · ${j.title}`} back={`/start?as=holder&product=${product}`}>
+      <div className="mb-8 flex flex-col items-center gap-4">
+        <JourneySteps at={3} />
+        <ProductSwitch value={product} onChange={(p) => go(`/explore?product=${p}`)} />
+      </div>
+      <section className="grid items-center gap-8 lg:grid-cols-[1.1fr_1fr]" data-testid={`explore-hero-${product}`}>
+        <div className="text-center lg:text-left">
+          <p className="mb-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{j.title} · {j.holder.who}</p>
+          <h1 className="font-display text-4xl font-extrabold leading-[1] md:text-5xl">{j.holder.title}</h1>
+          <p className="mt-4 text-muted-foreground">{j.holder.pitch}</p>
+          <ul className="mt-5 space-y-2 text-left text-sm">
+            {j.holder.promises.map((x) => (
+              <li key={x.title} className="flex gap-2.5"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Check className="h-3 w-3" /></span><span><b>{x.title}.</b> <span className="text-muted-foreground">{x.text}</span></span></li>
+            ))}
+          </ul>
+        </div>
+        <figure className="overflow-hidden rounded-[2rem] border border-border">
+          <img src={asset(j.illustration)} alt={product === "flying" ? "A Made in Our Country shop at an airport gate" : "A neighbourhood grocery with an About to Expire shelf"} className="w-full" />
+        </figure>
+      </section>
+      <h2 className="font-display mt-12 text-center text-3xl font-bold">{j.holder.cta}</h2>
 
       <div className="mx-auto mt-6 grid max-w-4xl gap-2 rounded-[2rem] border border-border p-2 shadow-[0_12px_40px_-24px_rgba(60,40,20,.35)] grid-cols-2 sm:grid-cols-4" data-testid="search-bar">
         <label className="flex flex-col rounded-3xl px-4 py-2 hover:bg-muted">
@@ -96,8 +127,8 @@ export default function Explore() {
         <label className="flex flex-col rounded-3xl px-4 py-2 hover:bg-muted">
           <span className="text-xs font-semibold">What you sell</span>
           <select value={what} onChange={(e) => setWhat(e.target.value)} className="bg-transparent text-sm text-muted-foreground outline-none" data-testid="select-what">
-            <option value="all">Any product</option>
-            {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            <option value="all">{product === "flying" ? "Any national product" : "Food or drinks"}</option>
+            {CATEGORIES.filter((c) => PRODUCT_CATS[product].includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </label>
       </div>
@@ -111,7 +142,7 @@ export default function Explore() {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <p className="text-sm text-muted-foreground" data-testid="text-result-count">{shops.length} shop{shops.length === 1 ? "" : "s"} with shelves</p>
+        <p className="text-sm text-muted-foreground" data-testid="text-result-count">{shops.length} {product === "flying" ? "airport shop" : "neighbourhood shop"}{shops.length === 1 ? "" : "s"} with shelves</p>
         <button onClick={() => setShowMap((m) => !m)} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-sm lg:hidden" data-testid="button-toggle-map">
           {showMap ? <><List className="h-4 w-4" />List</> : <><MapIcon className="h-4 w-4" />Map</>}
         </button>
@@ -167,6 +198,7 @@ export default function Explore() {
           <PrimaryButton onClick={() => { setF(draft); setOpen(false); }} data-testid="button-apply-filters">Show {draftCount} shop{draftCount === 1 ? "" : "s"}</PrimaryButton>
         </div>
       </Modal>
+      <HowItWorks product={product} />
     </Shell>
   );
 }

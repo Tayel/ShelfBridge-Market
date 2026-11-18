@@ -28,6 +28,8 @@ export interface Shop {
   createdAt: string; legacy?: boolean;
   // Marketplace listing attributes (search, filters, trust)
   listing: ShopListing;
+  /** "airport": a shop inside an airport, where About to Fly Inside shelves live. Absent: a neighbourhood shop. */
+  venue?: "airport";
   photos: ShopPhoto[];
 }
 
@@ -178,7 +180,8 @@ export interface State {
   notifications: Notice[]; audit: AuditEntry[];
   saved: string[]; // shop ids on the viewer's wishlist
   seq: number;
-  offersSeeded?: string; // when the About to expire / About to fly samples were added
+  offersSeeded?: string; // when the About to Expire / About to Fly samples were added
+  airportsSeeded?: string; // when the airport shops for About to Fly Inside were added
   migratedFromV1?: string;
 }
 

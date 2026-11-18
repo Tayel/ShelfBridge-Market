@@ -32,9 +32,9 @@ export default function ProductForm() {
     return [
       { id: "cat", ok: shop.categories.includes(f.category), text: shop.categories.includes(f.category) ? `${categoryLabel(f.category)} allowed here` : `${shop.name} doesn't take ${categoryLabel(f.category).toLowerCase()}` },
       f.offer === "expiring"
-        ? { id: "exp", ok: !!f.expiry && f.expiry <= addDays(today(), EXPIRING_WINDOW_DAYS) && Number(f.wasPrice) > Number(f.retail), text: !f.expiry ? "About to expire: set the expiry date" : f.expiry > addDays(today(), EXPIRING_WINDOW_DAYS) ? `About to expire: must expire within ${EXPIRING_WINDOW_DAYS} days` : Number(f.wasPrice) > Number(f.retail) ? `Near-date offer, ${Math.round((1 - Number(f.retail) / Number(f.wasPrice)) * 100)}% below usual price` : "About to expire: usual price must be above the offer price" }
+        ? { id: "exp", ok: !!f.expiry && f.expiry <= addDays(today(), EXPIRING_WINDOW_DAYS) && Number(f.wasPrice) > Number(f.retail), text: !f.expiry ? "About to Expire: set the expiry date" : f.expiry > addDays(today(), EXPIRING_WINDOW_DAYS) ? `About to Expire: must expire within ${EXPIRING_WINDOW_DAYS} days` : Number(f.wasPrice) > Number(f.retail) ? `Near-date offer, ${Math.round((1 - Number(f.retail) / Number(f.wasPrice)) * 100)}% below usual price` : "About to Expire: usual price must be above the offer price" }
         : { id: "exp", ok: !f.expiry || f.expiry >= minExp, text: !f.expiry ? "Not perishable" : f.expiry >= minExp ? "Expiry is 60+ days away" : "Expires within 60 days (sample rule)" },
-      ...(f.offer === "flying" ? [{ id: "fly", ok: f.origin === shop.country && !!f.story?.trim(), text: f.origin !== shop.country ? `About to fly: must be made in ${countryName(shop.country)}` : !f.story?.trim() ? "About to fly: add the culture story" : `Local souvenir from ${countryName(shop.country)}` }] : []),
+      ...(f.offer === "flying" ? [{ id: "fly", ok: shop.venue === "airport" && f.origin === shop.country && !!f.story?.trim(), text: shop.venue !== "airport" ? "About to Fly Inside: airport shops only" : f.origin !== shop.country ? `About to Fly Inside: must be made in ${countryName(shop.country)}` : !f.story?.trim() ? "About to Fly Inside: add the product's story" : `Made in ${countryName(shop.country)}, sold at the airport` }] : []),
       { id: "alc", ok: !(f.category === "alcohol" && shop.country === "AE"), text: f.category === "alcohol" && shop.country === "AE" ? "Alcohol restricted at this store (sample rule)" : "No sample destination rule hit" },
       { id: "cap", ok: shelfUnits(st, tokenId, existing?.id) + (existing && existing.status !== "pending" && existing.status !== "rejected" ? existing.available : f.initialQty) <= shop.shelf.capacity, text: `Shelf capacity ${shop.shelf.capacity} units` },
     ];
@@ -76,7 +76,7 @@ export default function ProductForm() {
             </Field>
           )}
           {f.offer === "flying" && (
-            <Field label="Culture story" hint={`Where it comes from and what it means. Must be made in ${countryName(shop.country)}.`}>
+            <Field label="Product story" hint={`Who makes it and where it comes from. Must be made in ${countryName(shop.country)}.`}>
               <textarea rows={2} maxLength={400} value={f.story ?? ""} onChange={(e) => set("story", e.target.value)} className={inputCls} data-testid="input-story" />
             </Field>
           )}

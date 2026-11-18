@@ -81,7 +81,7 @@ export function shopDefaults(p: Partial<Shop> & { id: string }): Shop {
 export const rentOf = (shop: Shop) => (shop.listing.pricing === "share" ? 0 : shop.price);
 
 // ---------- stores ----------
-export type ShopInput = Pick<Shop, "name" | "country" | "city" | "location" | "business" | "width" | "depth" | "bricks" | "tiers" | "price" | "categories" | "restrictions" | "hue"> & {
+export type ShopInput = Pick<Shop, "name" | "country" | "city" | "location" | "business" | "width" | "depth" | "bricks" | "tiers" | "price" | "categories" | "restrictions" | "hue"> & Partial<Pick<Shop, "venue">> & {
   listing?: Partial<ShopListing>; months?: number; photos?: ShopPhoto[];
 };
 
@@ -332,13 +332,14 @@ export type ListingInput = Pick<Listing, "name" | "sku" | "category" | "descript
 /** Rules for the two special offers; see OFFERS in data.ts. */
 function validateOffer(a: ListingInput, shop: Shop) {
   if (a.offer === "expiring") {
-    if (!a.expiry) fail("About to expire: set the batch expiry date.");
-    if (a.expiry && a.expiry > addDays(today(), EXPIRING_WINDOW_DAYS)) fail(`About to expire: the batch must expire within ${EXPIRING_WINDOW_DAYS} days.`);
-    if (!(a.wasPrice && a.wasPrice > a.retail)) fail("About to expire: the usual price must be higher than the offer price.");
+    if (!a.expiry) fail("About to Expire: set the batch expiry date.");
+    if (a.expiry && a.expiry > addDays(today(), EXPIRING_WINDOW_DAYS)) fail(`About to Expire: the batch must expire within ${EXPIRING_WINDOW_DAYS} days.`);
+    if (!(a.wasPrice && a.wasPrice > a.retail)) fail("About to Expire: the usual price must be higher than the offer price.");
   } else if (a.offer === "flying") {
-    if (a.origin !== shop.country) fail("About to fly: souvenirs must be made in the shop's own country.");
-    if (!a.story?.trim()) fail("About to fly: add the culture story behind the piece.");
-    if (a.story && a.story.length > 400) fail("About to fly: keep the story under 400 characters.");
+    if (shop.venue !== "airport") fail("About to Fly Inside: this product is sold in airport shops only.");
+    if (a.origin !== shop.country) fail("About to Fly Inside: products must be made in the airport's own country.");
+    if (!a.story?.trim()) fail("About to Fly Inside: add the story of where the product comes from.");
+    if (a.story && a.story.length > 400) fail("About to Fly Inside: keep the story under 400 characters.");
   }
 }
 

@@ -58,13 +58,13 @@ export default function Offers() {
       </div>
 
       <div className="mx-auto mt-10 max-w-4xl rounded-[2rem] border border-border p-6 text-sm text-muted-foreground">
-        <p className="font-display text-base font-bold text-foreground">{offer.id === "expiring" ? "For factories" : "For local makers"}</p>
+        <p className="font-display text-base font-bold text-foreground">{offer.id === "expiring" ? "For factories" : "For local manufacturers and participants"}</p>
         <p className="mt-1">
           {offer.id === "expiring"
             ? "Rent a shelf, add the product and choose \"About to expire\": set the batch expiry (within 45 days) and the usual price, and shoppers see the saving."
-            : "Rent a shelf in your own country, add the piece and choose \"About to fly\": tell the story behind it, and visitors read it before they buy."}
+            : "Join a group-funded shelf in an airport shop, add a product made in that country and choose \"About to Fly Inside\": travellers read its story before they buy."}
         </p>
-        <Link href="/explore" className="mt-3 inline-flex items-center gap-1 font-semibold text-primary">Find a shelf <ArrowRight className="h-4 w-4" /></Link>
+        <Link href={`/start?as=holder&product=${offer.id}`} className="mt-3 inline-flex items-center gap-1 font-semibold text-primary">Find a shelf <ArrowRight className="h-4 w-4" /></Link>
       </div>
       <p className="mt-6 text-center text-sm"><Link href={`/offers/${other.id}`} className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">See {other.title.toLowerCase()} too</Link></p>
     </Shell>

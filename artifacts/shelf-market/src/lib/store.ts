@@ -44,6 +44,7 @@ function normalize(raw: Partial<State>): State {
     seq: typeof raw.seq === "number" ? raw.seq : 0,
     migratedFromV1: raw.migratedFromV1,
     offersSeeded: raw.offersSeeded,
+    airportsSeeded: raw.airportsSeeded,
   };
   SEED_HOLDERS.forEach((h) => { if (!s.holders.some((x) => x.id === h.id)) s.holders.push({ ...h }); });
   s.tokens = s.tokens.map((t) => ({ ...t, sold: t.sold ?? 0, revenue: t.revenue ?? 0, sales: t.sales ?? [], holderId: t.holderId ?? YOU_HOLDER, contractId: t.contractId ?? "", stage: t.stage ?? "A" }));
@@ -102,11 +103,12 @@ function migrateV1(v1: { shops?: Shop[]; tokens?: Token[] }): State {
 
 /** Saves from before the special offers existed get their sample stock once, without new unread notices. */
 function withOffers(s: State): State {
-  if (s.offersSeeded) return s;
+  if (s.offersSeeded && s.airportsSeeded) return s;
   const known = new Set(s.notifications.map((n) => n.id));
   seedOffers(s);
   s.notifications.forEach((n) => { if (!known.has(n.id)) n.read = true; });
-  s.offersSeeded = nowIso();
+  s.offersSeeded = s.offersSeeded ?? nowIso();
+  s.airportsSeeded = nowIso();
   localStorage.setItem(KEY, JSON.stringify(s));
   return s;
 }
@@ -123,7 +125,7 @@ function load(): State {
     }
   } catch { /* fall through to seed */ }
   const s = seedState();
-  s.offersSeeded = nowIso();
+  s.offersSeeded = s.airportsSeeded = nowIso();
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
   return s;
 }

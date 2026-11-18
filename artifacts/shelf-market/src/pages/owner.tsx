@@ -15,6 +15,8 @@ import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { useToast } from "@/hooks/use-toast";
 import { ErrorNote, inputCls } from "@/components/kit";
+import { useProduct } from "@/components/product-bits";
+import { PRODUCT_JOURNEY } from "@/lib/data";
 import type { CancellationPolicy, PricingModel, ShelfType, ShopPhoto } from "@/lib/types";
 
 const PHASES = ["Tell us about your shop", "Make it stand out", "Finish up and publish"];
@@ -73,6 +75,8 @@ const chipCls = (on: boolean) => `rounded-full border px-4 py-2 text-sm transiti
 export default function Owner() {
   const [, go] = useLocation();
   const { toast } = useToast();
+  const product = useProduct();
+  const back = product ? `/host?product=${product}` : "/host";
   const [initial] = useState(readDraft);
   const [step, setStep] = useState(initial?.step ?? 0);
   const [f, setForm] = useState<Form>(initial?.form ?? BLANK);
@@ -99,7 +103,7 @@ export default function Owner() {
   const publish = () => {
     const r = act(() => actions.createShop({
       name: f.name.trim(), country: f.country, city: f.city.trim(), location: f.location.trim(), business: f.business,
-      width: f.width, depth: f.depth, bricks: f.bricks, tiers: f.tiers, price: f.price, categories: f.cats, restrictions: f.rules, hue,
+      width: f.width, depth: f.depth, bricks: f.bricks, tiers: f.tiers, price: f.price, categories: f.cats, restrictions: f.rules, hue, venue: product === "flying" ? "airport" : undefined,
       months: f.months, photos: f.photos,
       listing: {
         shelfType: f.shelfType, features: f.features, footTraffic: f.footTraffic, sellsWell: f.sellsWell.trim(),
@@ -108,7 +112,7 @@ export default function Owner() {
     }), "Submitted for platform approval (simulated)");
     if (r.ok && r.id) { clearDraft(); go(`/owner-dashboard/shops/${r.id}?new=1`); }
   };
-  const saveExit = () => { toast({ title: "Draft saved", description: "Open “List a new shop” to carry on." }); go("/host"); };
+  const saveExit = () => { toast({ title: "Draft saved", description: "Open “List a new shop” to carry on." }); go(back); };
   const startOver = () => { clearDraft(); setForm(BLANK); setStep(0); };
 
   const B = businessOf(f.business);
@@ -236,7 +240,8 @@ export default function Owner() {
 
   const phase = STEPS[step].phase;
   return (
-    <Shell title="List your shop" back="/host">
+    <Shell title={product ? `List your shop · ${PRODUCT_JOURNEY[product].title}` : "List your shop"} back={back}>
+      {product && <p className="mx-auto mb-4 w-fit rounded-full bg-primary/10 px-4 py-1.5 text-center text-sm font-semibold text-primary" data-testid="owner-product">{product === "flying" ? "Listing an airport shop for About to Fly Inside" : "Listing a neighbourhood shop for About to Expire"}</p>}
       <div className="flex flex-col items-center gap-3 text-center">
         <div className="flex gap-2 text-xs font-semibold" aria-label="Phases">
           {PHASES.map((p, i) => <span key={p} className={`rounded-full px-3 py-1 ${i === phase ? "bg-foreground text-background" : i < phase ? "bg-muted text-foreground" : "text-muted-foreground"}`}>{i + 1}. {p}</span>)}

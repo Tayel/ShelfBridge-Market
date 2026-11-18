@@ -17,8 +17,8 @@ const HOME: Record<Role, string> = { owner: "/owner-dashboard", holder: "/dashbo
 export const FINCRIME_OS_URL = import.meta.env.VITE_FINCRIME_OS_URL ?? "http://localhost:5176/shelf-market";
 
 const MENU: { group: string; items: { href: string; label: string }[] }[] = [
-  { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/host", label: "List a new shop" }] },
-  { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/explore", label: "Find a shelf" }, { href: "/saved", label: "Saved shelves" }] },
+  { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/start?as=owner", label: "List a new shop" }] },
+  { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/start?as=holder", label: "Find a shelf" }, { href: "/saved", label: "Saved shelves" }] },
   { group: "Customer", items: [{ href: "/offers/expiring", label: "About to expire" }, { href: "/offers/flying", label: "About to fly" }, { href: "/scan", label: "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
   { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: "Demo guide & limits" }, { href: FINCRIME_OS_URL, label: "In-Raf FinCrime OS ↗" }] },
 ];
