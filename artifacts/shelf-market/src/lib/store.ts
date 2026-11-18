@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from "react";
 import type { Contract, ContractVersion, Listing, Result, Role, Shop, State, Token } from "./types";
 import { DemoError, YOU_HOLDER, _internal, audit, shopDefaults } from "./ops";
-import { LEGACY_SEEDS, SEED_HOLDERS, SEED_SHOPS, emptyState, seedState } from "./seed";
+import { LEGACY_SEEDS, SEED_HOLDERS, SEED_SHOPS, emptyState, seedOffers, seedState } from "./seed";
 import { PRODUCTS } from "./data";
 import { nowIso, today, uid } from "./util";
 
@@ -43,6 +43,7 @@ function normalize(raw: Partial<State>): State {
     saved: arr<string>(raw.saved).filter((x) => typeof x === "string"),
     seq: typeof raw.seq === "number" ? raw.seq : 0,
     migratedFromV1: raw.migratedFromV1,
+    offersSeeded: raw.offersSeeded,
   };
   SEED_HOLDERS.forEach((h) => { if (!s.holders.some((x) => x.id === h.id)) s.holders.push({ ...h }); });
   s.tokens = s.tokens.map((t) => ({ ...t, sold: t.sold ?? 0, revenue: t.revenue ?? 0, sales: t.sales ?? [], holderId: t.holderId ?? YOU_HOLDER, contractId: t.contractId ?? "", stage: t.stage ?? "A" }));
@@ -99,10 +100,21 @@ function migrateV1(v1: { shops?: Shop[]; tokens?: Token[] }): State {
   return normalize(merged);
 }
 
+/** Saves from before the special offers existed get their sample stock once, without new unread notices. */
+function withOffers(s: State): State {
+  if (s.offersSeeded) return s;
+  const known = new Set(s.notifications.map((n) => n.id));
+  seedOffers(s);
+  s.notifications.forEach((n) => { if (!known.has(n.id)) n.read = true; });
+  s.offersSeeded = nowIso();
+  localStorage.setItem(KEY, JSON.stringify(s));
+  return s;
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return normalize(JSON.parse(raw));
+    if (raw) return withOffers(normalize(JSON.parse(raw)));
     const old = localStorage.getItem(V1_KEY);
     if (old) {
       const s = migrateV1(JSON.parse(old));
@@ -111,6 +123,7 @@ function load(): State {
     }
   } catch { /* fall through to seed */ }
   const s = seedState();
+  s.offersSeeded = nowIso();
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
   return s;
 }
@@ -129,7 +142,7 @@ if (typeof window !== "undefined") {
 function readLatest(): State {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return normalize(JSON.parse(raw));
+    if (raw) return withOffers(normalize(JSON.parse(raw)));
   } catch { /* use memory */ }
   return state;
 }

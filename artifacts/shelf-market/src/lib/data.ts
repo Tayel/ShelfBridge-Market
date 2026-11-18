@@ -53,6 +53,14 @@ export const CATEGORIES = [
 ];
 export const categoryLabel = (id: string) => CATEGORIES.find((c) => c.id === id)?.label ?? id;
 
+/** The two special shelf offers. Days are the "about to expire" window: stock must expire within it. */
+export const EXPIRING_WINDOW_DAYS = 45;
+export const OFFERS = [
+  { id: "expiring", title: "About to expire", tagline: "Good food from factories, close to its date.", sub: "Factories place stock that expires soon on neighbourhood shelves, at a lower price, so it sells instead of going to waste.", cta: "See near-date deals" },
+  { id: "flying", title: "About to fly", tagline: "Local souvenirs that carry a place's culture.", sub: "Domestic makers stock small, packable pieces of their city, so visitors take home something made where they stood.", cta: "See local souvenirs" },
+] as const;
+export const offerTitle = (id?: string) => OFFERS.find((o) => o.id === id)?.title ?? "";
+
 export const RESTRICTIONS = [
   { id: "no-plastic", label: "No single-use plastic" },
   { id: "fair-trade", label: "Fair-trade only" },
@@ -66,6 +74,7 @@ export interface Product {
   blockedIn?: string[]; // illustrative destination block
   tags?: string[]; // e.g. "plastic", "animal-test", "fair-trade"
   description?: string;
+  offer?: "expiring" | "flying"; wasPrice?: number; story?: string;
 }
 
 export const PRODUCTS: Product[] = [
@@ -86,6 +95,15 @@ export const PRODUCTS: Product[] = [
   { id: "mezcal", name: "Small-batch mezcal", category: "alcohol", origins: ["MX"], unitCost: 18, retail: 42, color: "#C9B47A", blockedIn: ["AE"] },
   { id: "chili", name: "Chili paste (old batch)", category: "food", origins: ["MX", "IN", "KE", "EG"], unitCost: 1.9, retail: 5.5, color: "#D8462F", expiry: "2024-12-01" },
   { id: "wipes", name: "Plastic wet wipes", category: "beauty", origins: ["DE", "IN", "CA", "TR"], unitCost: 0.9, retail: 3.2, color: "#A8C3D6", tags: ["plastic"] },
+  // About to expire: factory stock close to its date (expiry is set relative to today when stocked)
+  { id: "biscuit", name: "Sesame biscuit packs", category: "food", origins: ["EG"], unitCost: 0.9, retail: 1.6, wasPrice: 3.2, color: "#C99A5B", offer: "expiring", description: "Factory surplus from a Sixth of October plant, 6 packs of 80 g." },
+  { id: "mango", name: "Mango juice cartons", category: "drinks", origins: ["EG"], unitCost: 0.7, retail: 1.2, wasPrice: 2.4, color: "#E9A23B", offer: "expiring", description: "Ismailia mango nectar, 6 × 200 ml. Short-dated run." },
+  { id: "feta", name: "White cheese tins", category: "food", origins: ["EG"], unitCost: 1.8, retail: 2.9, wasPrice: 5.5, color: "#E8E1D0", offer: "expiring", description: "Dairy factory overrun, 500 g tins, keep cool after opening." },
+  // About to fly: local souvenirs from domestic makers
+  { id: "nazar", name: "Nazar glass charm", category: "craft", origins: ["TR"], unitCost: 1.6, retail: 6.5, color: "#2F5E9E", offer: "flying", description: "Hand-blown blue glass eye on a cotton cord.", story: "The nazar has guarded Anatolian homes for centuries; this one is blown in a family workshop in Görece, near İzmir." },
+  { id: "cezve", name: "Mini copper cezve", category: "craft", origins: ["TR"], unitCost: 5.4, retail: 15.9, color: "#B5652E", offer: "flying", description: "Hammered copper coffee pot, one-cup size.", story: "Turkish coffee is on UNESCO's intangible heritage list; coppersmiths in Gaziantep still hammer each cezve by hand." },
+  { id: "azulejo", name: "Azulejo tile magnet", category: "craft", origins: ["PT"], unitCost: 2.2, retail: 7.9, color: "#2C7DA0", offer: "flying", description: "Hand-painted tin-glaze tile, 5 × 5 cm.", story: "Blue-and-white azulejos cover Lisbon's façades; this pattern is copied from a house in Graça and painted in Sacavém." },
+  { id: "galo", name: "Barcelos rooster", category: "craft", origins: ["PT"], unitCost: 3.1, retail: 9.5, color: "#C8412E", offer: "flying", description: "Painted clay rooster, 9 cm.", story: "The rooster of Barcelos is Portugal's folk symbol of luck and justice, shaped and painted by potters in the Minho." },
   { id: "cream", name: "Lab-tested face cream", category: "beauty", origins: ["DE", "CA", "JP", "AE"], unitCost: 5.5, retail: 16, color: "#E6C6B8", tags: ["animal-test"] },
 ];
 

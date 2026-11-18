@@ -11,7 +11,7 @@ import {
   awaitingVersion, contractOfToken, contractStatus, executedVersion, invoiceStatus, isExpired, lateFeeFor,
   listingBlockReason, reservedQty, shelfBlockReason, shelfLabel, shelfUnits, takenSlots, slotsOf,
 } from "./selectors";
-import { CUSTOMER_SERVICE_FEE, PLATFORM_COMMISSION_PCT, demoTaxFor } from "./data";
+import { CUSTOMER_SERVICE_FEE, EXPIRING_WINDOW_DAYS, PLATFORM_COMMISSION_PCT, demoTaxFor } from "./data";
 import { addDays, addMonths, nowIso, round2, today, uid } from "./util";
 
 export class DemoError extends Error {}
@@ -327,7 +327,20 @@ export function syncStage(s: State, tokenId: string) {
   t.stage = L.some((l) => l.status === "active") ? "B" : L.some((l) => l.status === "approved" || l.status === "inactive") ? "approved" : L.some((l) => l.status === "pending") ? "requested" : L.some((l) => l.status === "rejected") ? "rejected" : "A";
 }
 
-export type ListingInput = Pick<Listing, "name" | "sku" | "category" | "description" | "color" | "imageUrl" | "origin" | "retail" | "cost" | "taxRate" | "batch" | "expiry" | "initialQty">;
+export type ListingInput = Pick<Listing, "name" | "sku" | "category" | "description" | "color" | "imageUrl" | "origin" | "retail" | "cost" | "taxRate" | "batch" | "expiry" | "initialQty"> & Partial<Pick<Listing, "offer" | "wasPrice" | "story">>;
+
+/** Rules for the two special offers; see OFFERS in data.ts. */
+function validateOffer(a: ListingInput, shop: Shop) {
+  if (a.offer === "expiring") {
+    if (!a.expiry) fail("About to expire: set the batch expiry date.");
+    if (a.expiry && a.expiry > addDays(today(), EXPIRING_WINDOW_DAYS)) fail(`About to expire: the batch must expire within ${EXPIRING_WINDOW_DAYS} days.`);
+    if (!(a.wasPrice && a.wasPrice > a.retail)) fail("About to expire: the usual price must be higher than the offer price.");
+  } else if (a.offer === "flying") {
+    if (a.origin !== shop.country) fail("About to fly: souvenirs must be made in the shop's own country.");
+    if (!a.story?.trim()) fail("About to fly: add the culture story behind the piece.");
+    if (a.story && a.story.length > 400) fail("About to fly: keep the story under 400 characters.");
+  }
+}
 
 function validateListing(a: ListingInput) {
   if (!a.name.trim()) fail("Product name is required.");
@@ -346,6 +359,7 @@ export function createListing(s: State, tokenId: string, a: ListingInput, actor:
   if (t.released) fail("This shelf was released.");
   validateListing(a);
   const shop = shopOf(s, t.shopId);
+  validateOffer(a, shop);
   if (s.listings.some((l) => l.tokenId === tokenId && l.sku.trim().toLowerCase() === a.sku.trim().toLowerCase() && l.status !== "removed")) fail("That SKU already exists on this shelf.");
   const used = shelfUnits(s, tokenId);
   if (used + a.initialQty > shop.shelf.capacity) fail(`Shelf capacity is ${shop.shelf.capacity} units; ${used} already allocated. Max you can add: ${Math.max(0, shop.shelf.capacity - used)}.`);
@@ -363,9 +377,10 @@ export function updateListing(s: State, id: string, a: ListingInput) {
   if (reservedQty(s, id) > 0) fail("A checkout is in progress for this product. Try again after it completes.");
   validateListing(a);
   const shop = shopOf(s, l.shopId);
+  validateOffer(a, shop);
   const newAvail = l.status === "pending" || l.status === "rejected" || l.status === "draft" ? a.initialQty : l.available;
   if (shelfUnits(s, l.tokenId, l.id) + newAvail > shop.shelf.capacity) fail(`That exceeds shelf capacity (${shop.shelf.capacity} units).`);
-  const commercial = a.name !== l.name || a.retail !== l.retail || a.category !== l.category || a.taxRate !== l.taxRate || a.expiry !== l.expiry || a.batch !== l.batch;
+  const commercial = a.name !== l.name || a.retail !== l.retail || a.category !== l.category || a.taxRate !== l.taxRate || a.expiry !== l.expiry || a.batch !== l.batch || a.offer !== l.offer || a.wasPrice !== l.wasPrice || a.story !== l.story;
   const initial = l.sold === 0 ? a.initialQty : l.initialQty;
   Object.assign(l, { ...a, sku: a.sku.trim().toUpperCase(), initialQty: initial, available: newAvail, updatedAt: nowIso() });
   if (commercial && (l.status === "approved" || l.status === "active" || l.status === "inactive" || l.status === "rejected")) {

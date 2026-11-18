@@ -34,6 +34,10 @@ export const SEED_HOLDERS: Holder[] = [
   { id: "h-nour", name: "Nour Atelier (sample)", kind: "company", country: "EG", registration: "DEMO-EG-CR-90021", verification: "demo-reviewed", seeded: true },
   { id: "h-defne", name: "Defne Seramik (sample)", kind: "company", country: "TR", registration: "DEMO-TR-MERSIS-7781", verification: "demo-reviewed", seeded: true },
   { id: "h-zsofi", name: "Zsófia Kertész (sample)", kind: "individual", country: "HU", registration: "DEMO-HU-EV-55120", verification: "not-started", seeded: true },
+  // About to expire / About to fly sample makers
+  { id: "h-delta", name: "Delta Foods Factory (sample)", kind: "company", country: "EG", registration: "DEMO-EG-CR-33870", verification: "demo-reviewed", seeded: true },
+  { id: "h-gorece", name: "Görece Cam Atölyesi (sample)", kind: "company", country: "TR", registration: "DEMO-TR-MERSIS-4410", verification: "demo-reviewed", seeded: true },
+  { id: "h-minho", name: "Oficina do Minho (sample)", kind: "individual", country: "PT", registration: "DEMO-PT-NIF-2290", verification: "demo-reviewed", seeded: true },
 ];
 
 export function emptyState(): State {
@@ -42,13 +46,50 @@ export function emptyState(): State {
 
 const fromProduct = (pid: string, origin: string, qty: number, over: { expiry?: string; batch?: string } = {}) => {
   const p = PRODUCTS.find((x) => x.id === pid)!;
-  return { name: p.name, sku: `${pid.slice(0, 4).toUpperCase()}-${origin}-01`, category: p.category, description: p.description ?? "", color: p.color, imageUrl: undefined, origin, retail: p.retail, cost: p.unitCost, taxRate: 0, batch: over.batch ?? `B-${origin}-2026-01`, expiry: over.expiry ?? p.expiry, initialQty: qty };
+  return { offer: p.offer, wasPrice: p.wasPrice, story: p.story, name: p.name, sku: `${pid.slice(0, 4).toUpperCase()}-${origin}-01`, category: p.category, description: p.description ?? "", color: p.color, imageUrl: undefined, origin, retail: p.retail, cost: p.unitCost, taxRate: 0, batch: over.batch ?? `B-${origin}-2026-01`, expiry: over.expiry ?? p.expiry, initialQty: qty };
 };
 
 /** Instant-book shops already carry the owner's agreement from the request, so only sign when it's missing. */
 function signOwner(s: State, contractId: string, name: string) {
   const v = s.contracts.find((c) => c.id === contractId)!.versions[0];
   if (!v.ownerSig) signContract(s, contractId, "owner", name, "seed");
+}
+
+/** An active, signed sample shelf: contract from 30 days ago, first invoices paid. */
+function activeShelf(s: State, shopId: string, slot: number, holderId: string, owner: string, holder: string): string {
+  const cid = requestContract(s, { shopId, slot, holderId, start: today() });
+  const k = s.contracts.find((c) => c.id === cid)!;
+  k.versions[0].snapshot.terms.start = addDays(today(), -30);
+  k.versions[0].snapshot.terms.end = addDays(today(), 150);
+  approveContract(s, cid, "Platform reviewer (seed)");
+  signOwner(s, cid, owner);
+  signContract(s, cid, "holder", holder, "seed");
+  s.invoices.filter((i) => i.contractId === cid).slice(0, 1).forEach((i) => payInvoice(s, i.id));
+  return k.tokenId;
+}
+
+/**
+ * Sample stock for the two special offers: a Cairo factory clearing near-date food ("About to expire") and
+ * local makers in Istanbul and Lisbon selling souvenirs ("About to fly"). Also added to browsers that saved
+ * their demo before the offers existed (see store.ts), so it skips shelves that are already taken.
+ */
+export function seedOffers(s: State) {
+  const plan: { shopId: string; slot: number; holderId: string; owner: string; holder: string; items: [string, number, number?][] }[] = [
+    { shopId: "s-cairo", slot: 1, holderId: "h-delta", owner: "Hany Mansour", holder: "Delta Foods Factory", items: [["biscuit", 10, 12], ["mango", 12, 9], ["feta", 6, 21]] },
+    { shopId: "s-istanbul", slot: 0, holderId: "h-gorece", owner: "Emre Aydın", holder: "Görece Cam Atölyesi", items: [["nazar", 14], ["cezve", 5]] },
+    { shopId: "s-lisbon", slot: 0, holderId: "h-minho", owner: "Inês Cardoso", holder: "Oficina do Minho", items: [["azulejo", 16], ["galo", 8]] },
+  ];
+  for (const p of plan) {
+    const shop = s.shops.find((x) => x.id === p.shopId);
+    if (!shop || s.tokens.some((t) => t.shopId === p.shopId && t.slot === p.slot)) continue;
+    try {
+      const tokenId = activeShelf(s, p.shopId, p.slot, p.holderId, p.owner, p.holder);
+      const ids = p.items.map(([pid, qty, days]) =>
+        createListing(s, tokenId, { ...fromProduct(pid, shop.country, qty, days ? { expiry: addDays(today(), days), batch: `NEAR-${pid.slice(0, 3).toUpperCase()}-${days}` } : {}), taxRate: shop.terms.taxRate }));
+      ids.forEach((id) => { decideListing(s, id, true, "", "Store owner (seed)"); activateListing(s, id); });
+      const o = authorize(s, ids[0], 2, false); capture(s, o);
+    } catch { /* a shelf changed under us in an old save: leave it out */ }
+  }
 }
 
 /** Seed records are labelled as sample data; their signatures are marked "seed". */
@@ -88,6 +129,8 @@ export function seedState(): State {
   const l5 = createListing(s, k2.tokenId, { ...fromProduct("lokum", "TR", 9, { expiry: addDays(today(), 19), batch: "LK-0526" }), taxRate: tax("TR") });
   decideListing(s, l4, true, "", "Store owner (seed)"); decideListing(s, l5, true, "", "Store owner (seed)");
   activateListing(s, l4); activateListing(s, l5);
+
+  seedOffers(s);
 
   // Budapest: awaiting signatures
   requestContract(s, { shopId: "s-budapest", slot: 0, holderId: "h-zsofi", start: addDays(today(), 3) });

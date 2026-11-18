@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { Download } from "lucide-react";
-import { Shell, PageTitle } from "@/components/shell";
+import { buildComplianceFeed } from "@/lib/feed";
+import { FINCRIME_OS_URL, Shell, PageTitle } from "@/components/shell";
 import { Card, Empty, ErrorNote, Notice, Pill, SmallButton, Stat, Tabs, inputCls } from "@/components/kit";
 import { useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
@@ -80,7 +81,11 @@ function Finance({ st }: { st: State }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs value={view} onChange={setView} options={[{ id: "orders", label: "Transactions" }, { id: "ledger", label: "Ledger" }, { id: "rec", label: "Reconciliation", count: rec.filter((r) => !r.ok).length }]} />
-        {view !== "rec" && <SmallButton onClick={exportCsv} testId="button-export-csv"><Download className="h-4 w-4" />Export CSV</SmallButton>}
+        <div className="flex flex-wrap gap-2">
+          {view !== "rec" && <SmallButton onClick={exportCsv} testId="button-export-csv"><Download className="h-4 w-4" />Export CSV</SmallButton>}
+          <SmallButton onClick={() => downloadBlob(`inraf-shelf-market-feed-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(buildComplianceFeed(st), null, 2), "application/json")} testId="button-export-feed"><Download className="h-4 w-4" />Compliance feed (JSON)</SmallButton>
+          <a href={FINCRIME_OS_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium transition hover:border-primary/40" data-testid="link-fincrime-os">Open In-Raf FinCrime OS ↗</a>
+        </div>
       </div>
       {view !== "rec" && (
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">

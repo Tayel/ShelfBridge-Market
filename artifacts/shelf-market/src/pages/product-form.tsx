@@ -6,9 +6,9 @@ import { Card, ErrorNote, Field, ProductImage, inputCls } from "@/components/kit
 import { useStore } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
-import { CATEGORIES, COUNTRIES, SWATCHES, categoryLabel, countryName } from "@/lib/data";
+import { CATEGORIES, COUNTRIES, EXPIRING_WINDOW_DAYS, OFFERS, SWATCHES, categoryLabel, countryName, offerTitle } from "@/lib/data";
 import { shelfLabel, shelfUnits } from "@/lib/selectors";
-import { addDays, today } from "@/lib/util";
+import { addDays, today, usd } from "@/lib/util";
 import type { ListingInput } from "@/lib/ops";
 
 export default function ProductForm() {
@@ -22,7 +22,7 @@ export default function ProductForm() {
   const shop = st.shops.find((s) => s.id === token?.shopId);
 
   const [f, setF] = useState<ListingInput>(() => existing
-    ? { name: existing.name, sku: existing.sku, category: existing.category, description: existing.description, color: existing.color, imageUrl: existing.imageUrl, origin: existing.origin, retail: existing.retail, cost: existing.cost, taxRate: existing.taxRate, batch: existing.batch, expiry: existing.expiry, initialQty: existing.initialQty }
+    ? { name: existing.name, sku: existing.sku, category: existing.category, description: existing.description, color: existing.color, imageUrl: existing.imageUrl, origin: existing.origin, retail: existing.retail, cost: existing.cost, taxRate: existing.taxRate, batch: existing.batch, expiry: existing.expiry, initialQty: existing.initialQty, offer: existing.offer, wasPrice: existing.wasPrice, story: existing.story }
     : { name: "", sku: "", category: shop?.categories[0] ?? "food", description: "", color: SWATCHES[0], imageUrl: "", origin: shop?.country ?? "EG", retail: 9.5, cost: 4, taxRate: shop?.terms.taxRate ?? 10, batch: "", expiry: "", initialQty: 6 });
   const set = <K extends keyof ListingInput>(k: K, v: ListingInput[K]) => setF((x) => ({ ...x, [k]: v }));
 
@@ -31,7 +31,10 @@ export default function ProductForm() {
     const minExp = addDays(today(), 60);
     return [
       { id: "cat", ok: shop.categories.includes(f.category), text: shop.categories.includes(f.category) ? `${categoryLabel(f.category)} allowed here` : `${shop.name} doesn't take ${categoryLabel(f.category).toLowerCase()}` },
-      { id: "exp", ok: !f.expiry || f.expiry >= minExp, text: !f.expiry ? "Not perishable" : f.expiry >= minExp ? "Expiry is 60+ days away" : "Expires within 60 days (sample rule)" },
+      f.offer === "expiring"
+        ? { id: "exp", ok: !!f.expiry && f.expiry <= addDays(today(), EXPIRING_WINDOW_DAYS) && Number(f.wasPrice) > Number(f.retail), text: !f.expiry ? "About to expire: set the expiry date" : f.expiry > addDays(today(), EXPIRING_WINDOW_DAYS) ? `About to expire: must expire within ${EXPIRING_WINDOW_DAYS} days` : Number(f.wasPrice) > Number(f.retail) ? `Near-date offer, ${Math.round((1 - Number(f.retail) / Number(f.wasPrice)) * 100)}% below usual price` : "About to expire: usual price must be above the offer price" }
+        : { id: "exp", ok: !f.expiry || f.expiry >= minExp, text: !f.expiry ? "Not perishable" : f.expiry >= minExp ? "Expiry is 60+ days away" : "Expires within 60 days (sample rule)" },
+      ...(f.offer === "flying" ? [{ id: "fly", ok: f.origin === shop.country && !!f.story?.trim(), text: f.origin !== shop.country ? `About to fly: must be made in ${countryName(shop.country)}` : !f.story?.trim() ? "About to fly: add the culture story" : `Local souvenir from ${countryName(shop.country)}` }] : []),
       { id: "alc", ok: !(f.category === "alcohol" && shop.country === "AE"), text: f.category === "alcohol" && shop.country === "AE" ? "Alcohol restricted at this store (sample rule)" : "No sample destination rule hit" },
       { id: "cap", ok: shelfUnits(st, tokenId, existing?.id) + (existing && existing.status !== "pending" && existing.status !== "rejected" ? existing.available : f.initialQty) <= shop.shelf.capacity, text: `Shelf capacity ${shop.shelf.capacity} units` },
     ];
@@ -41,7 +44,7 @@ export default function ProductForm() {
 
   const lockedQty = !!existing && existing.status !== "pending" && existing.status !== "rejected" && existing.status !== "draft";
   const submit = () => {
-    const payload: ListingInput = { ...f, imageUrl: f.imageUrl?.trim() || undefined, expiry: f.expiry || undefined, retail: Number(f.retail), cost: Number(f.cost), taxRate: Number(f.taxRate), initialQty: Math.floor(Number(f.initialQty)) };
+    const payload: ListingInput = { ...f, imageUrl: f.imageUrl?.trim() || undefined, expiry: f.expiry || undefined, offer: f.offer || undefined, wasPrice: f.offer === "expiring" && f.wasPrice ? Number(f.wasPrice) : undefined, story: f.offer === "flying" ? f.story?.trim() || undefined : undefined, retail: Number(f.retail), cost: Number(f.cost), taxRate: Number(f.taxRate), initialQty: Math.floor(Number(f.initialQty)) };
     const r = existing ? act(() => actions.updateListing(existing.id, payload), "Product saved") : act(() => actions.createListing(token.id, payload), "Sent to store owner for approval");
     if (r.ok) go(`/shelf/${token.id}`);
   };
@@ -61,13 +64,29 @@ export default function ProductForm() {
             <Field label="Category"><select value={f.category} onChange={(e) => set("category", e.target.value)} className={inputCls} data-testid="select-category">{CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></Field>
             <Field label="Made in"><select value={f.origin} onChange={(e) => set("origin", e.target.value)} className={inputCls} data-testid="select-origin">{COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></Field>
           </div>
+          <Field label="Shelf offer" hint={f.offer ? OFFERS.find((o) => o.id === f.offer)?.tagline : "Optional: list it under one of the two special offers"}>
+            <select value={f.offer ?? ""} onChange={(e) => { const v = (e.target.value || undefined) as ListingInput["offer"]; set("offer", v); if (v === "flying") set("origin", shop.country); }} className={inputCls} data-testid="select-offer">
+              <option value="">Regular product</option>
+              {OFFERS.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+            </select>
+          </Field>
+          {f.offer === "expiring" && (
+            <Field label="Usual price (USD)" hint={`Shown crossed out next to the offer price. The batch must expire within ${EXPIRING_WINDOW_DAYS} days.`}>
+              <input type="number" step="0.1" min={0} value={f.wasPrice ?? ""} onChange={(e) => set("wasPrice", e.target.value === "" ? undefined : Number(e.target.value))} className={inputCls} data-testid="input-was-price" />
+            </Field>
+          )}
+          {f.offer === "flying" && (
+            <Field label="Culture story" hint={`Where it comes from and what it means. Must be made in ${countryName(shop.country)}.`}>
+              <textarea rows={2} maxLength={400} value={f.story ?? ""} onChange={(e) => set("story", e.target.value)} className={inputCls} data-testid="input-story" />
+            </Field>
+          )}
           <Field label="Description"><textarea rows={2} value={f.description} onChange={(e) => set("description", e.target.value)} className={inputCls} data-testid="input-description" /></Field>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Retail (USD)"><input type="number" step="0.1" min={0} value={f.retail} onChange={num("retail")} className={inputCls} data-testid="input-retail" /></Field>
             <Field label="Unit cost (USD)"><input type="number" step="0.1" min={0} value={f.cost} onChange={num("cost")} className={inputCls} data-testid="input-cost" /></Field>
             <Field label="Tax % (illustrative)"><input type="number" step="0.5" min={0} max={40} value={f.taxRate} onChange={num("taxRate")} className={inputCls} data-testid="input-tax" /></Field>
             <Field label="Batch"><input value={f.batch} onChange={(e) => set("batch", e.target.value)} className={inputCls} data-testid="input-batch" /></Field>
-            <Field label="Expiry (optional)"><input type="date" min={today()} value={f.expiry ?? ""} onChange={(e) => set("expiry", e.target.value)} className={inputCls} data-testid="input-expiry" /></Field>
+            <Field label={f.offer === "expiring" ? "Expiry" : "Expiry (optional)"}><input type="date" min={today()} value={f.expiry ?? ""} onChange={(e) => set("expiry", e.target.value)} className={inputCls} data-testid="input-expiry" /></Field>
             <Field label="Initial quantity" hint={lockedQty ? "Use Restock on the shelf page" : undefined}><input type="number" min={1} step={1} disabled={lockedQty} value={f.initialQty} onChange={num("initialQty")} className={inputCls} data-testid="input-qty" /></Field>
           </div>
           <div>
@@ -86,6 +105,7 @@ export default function ProductForm() {
             <ProductImage color={f.color} url={f.imageUrl || undefined} name={f.name || "Preview"} className="h-28 w-28" />
             <p className="font-display mt-3 text-lg font-bold">{f.name || "Your product"}</p>
             <p className="text-sm text-muted-foreground">{countryName(f.origin)} · {categoryLabel(f.category)}</p>
+            {f.offer && <p className="mt-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{offerTitle(f.offer)}{f.offer === "expiring" && f.wasPrice ? ` · ${usd(Number(f.retail))} instead of ${usd(Number(f.wasPrice))}` : ""}</p>}
           </Card>
           <Card>
             <p className="font-display font-bold">Sample compatibility checks</p>

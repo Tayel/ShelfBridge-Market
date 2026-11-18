@@ -4,6 +4,7 @@ import { AlertTriangle, Clock, Pencil, Plus, Power, QrCode, Sparkles, Trash2 } f
 import { Shell } from "@/components/shell";
 import { Card, Empty, ErrorNote, Modal, Notice, Pill, ProductImage, SmallButton, Field, inputCls } from "@/components/kit";
 import { ShelfQr } from "@/components/qr";
+import { OfferPill } from "@/components/offer-bits";
 import { useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
@@ -68,12 +69,12 @@ export default function ShelfPage() {
                 <div className="flex gap-4">
                   <ProductImage color={l.color} url={l.imageUrl} name={l.name} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2"><p className="font-display text-lg font-bold">{l.name}</p><Pill testId={`status-listing-${l.id}`}>{st8}</Pill>
+                    <div className="flex flex-wrap items-center gap-2"><p className="font-display text-lg font-bold">{l.name}</p><Pill testId={`status-listing-${l.id}`}>{st8}</Pill><OfferPill l={l} />
                       {isLowStock(l) && <Pill tone="warn">low stock</Pill>}
                       {expiresSoon(l) && <Pill tone="warn"><Clock className="h-3 w-3" />expires {fmtDate(l.expiry)}</Pill>}
                       {isExpired(l) && <Pill tone="bad"><AlertTriangle className="h-3 w-3" />expired</Pill>}
                     </div>
-                    <p className="text-xs text-muted-foreground">{l.sku} · batch {l.batch || "—"} · {usd(l.retail)} + {l.taxRate}% tax*</p>
+                    <p className="text-xs text-muted-foreground">{l.sku} · batch {l.batch || "—"} · {usd(l.retail)}{l.offer === "expiring" && l.wasPrice ? ` (usually ${usd(l.wasPrice)})` : ""} + {l.taxRate}% tax*</p>
                     <div className="mt-2 grid grid-cols-4 gap-2 text-center text-xs">
                       <div><p className="text-muted-foreground">Initial</p><p className="font-semibold tabular-nums">{l.initialQty}</p></div>
                       <div><p className="text-muted-foreground">Sold</p><p className="font-semibold tabular-nums" data-testid={`text-sold-${l.id}`}>{l.sold}</p></div>

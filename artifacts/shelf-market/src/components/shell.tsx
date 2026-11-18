@@ -13,11 +13,14 @@ import type { Role } from "@/lib/types";
 
 const HOME: Record<Role, string> = { owner: "/owner-dashboard", holder: "/dashboard", customer: "/scan", admin: "/admin" };
 
+/** The compliance console that screens this marketplace's makers and monitors its sales. */
+export const FINCRIME_OS_URL = import.meta.env.VITE_FINCRIME_OS_URL ?? "http://localhost:5176/shelf-market";
+
 const MENU: { group: string; items: { href: string; label: string }[] }[] = [
   { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/host", label: "List a new shop" }] },
   { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/explore", label: "Find a shelf" }, { href: "/saved", label: "Saved shelves" }] },
-  { group: "Customer", items: [{ href: "/scan", label: "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
-  { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: "Demo guide & limits" }] },
+  { group: "Customer", items: [{ href: "/offers/expiring", label: "About to expire" }, { href: "/offers/flying", label: "About to fly" }, { href: "/scan", label: "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
+  { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: "Demo guide & limits" }, { href: FINCRIME_OS_URL, label: "In-Raf FinCrime OS ↗" }] },
 ];
 
 export function Logo() {
@@ -72,7 +75,7 @@ function RoleSwitch() {
               {gi > 0 && <DropdownMenuSeparator />}
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">{g.group}</DropdownMenuLabel>
               {g.items.map((i) => (
-                <DropdownMenuItem key={i.href} onSelect={() => go(i.href)} data-testid={`menu-${i.href.slice(1)}`}>{i.label}</DropdownMenuItem>
+                <DropdownMenuItem key={i.href} onSelect={() => (i.href.startsWith("http") ? window.open(i.href, "_blank", "noopener") : go(i.href))} data-testid={`menu-${i.href.startsWith("http") ? "fincrime-os" : i.href.slice(1)}`}>{i.label}</DropdownMenuItem>
               ))}
             </div>
           ))}

@@ -120,8 +120,13 @@ export interface RentInvoice {
 
 export type ListingStatus = "draft" | "pending" | "approved" | "rejected" | "active" | "inactive" | "removed";
 
+/** Special shelf offers. "expiring": factory stock close to its expiry date, sold below its usual price.
+ *  "flying": souvenirs from local makers that carry the place's culture, for visitors to take home. */
+export type ListingOffer = "expiring" | "flying";
+
 export interface Listing {
   id: string; tokenId: string; shopId: string; holderId: string;
+  offer?: ListingOffer; wasPrice?: number; story?: string;
   name: string; sku: string; category: string; description: string;
   color: string; imageUrl?: string; origin: string;
   retail: number; cost: number; taxRate: number; batch: string; expiry?: string;
@@ -173,6 +178,7 @@ export interface State {
   notifications: Notice[]; audit: AuditEntry[];
   saved: string[]; // shop ids on the viewer's wishlist
   seq: number;
+  offersSeeded?: string; // when the About to expire / About to fly samples were added
   migratedFromV1?: string;
 }
 

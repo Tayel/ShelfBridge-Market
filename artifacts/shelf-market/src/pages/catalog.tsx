@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Check, CreditCard, Minus, Plus, Smartphone, X } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
 import { Card, Empty, ErrorNote, Notice, ProductImage } from "@/components/kit";
+import { OfferNote } from "@/components/offer-bits";
 import { useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
@@ -86,8 +87,12 @@ export default function Catalog() {
                         <p className="font-display text-lg font-bold">{x.name}</p>
                         <p className="text-xs text-muted-foreground">{categoryLabel(x.category)} · {countryName(x.origin)}{x.expiry ? ` · best before ${fmtDate(x.expiry)}` : ""}</p>
                         <p className="text-xs text-muted-foreground">{why ?? `${x.available - reservedQty(st, x.id)} available`}</p>
+                        {x.offer && <OfferNote l={x} />}
                       </div>
-                      <span className="font-display text-lg font-bold tabular-nums">{usd(x.retail)}</span>
+                      <span className="flex flex-col items-end">
+                        <span className="font-display text-lg font-bold tabular-nums">{usd(x.retail)}</span>
+                        {x.offer === "expiring" && x.wasPrice && <span className="text-xs text-muted-foreground line-through tabular-nums">{usd(x.wasPrice)}</span>}
+                      </span>
                     </button>
                   );
                 })}
