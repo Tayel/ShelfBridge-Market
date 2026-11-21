@@ -7,7 +7,7 @@ import { ShelfArt } from "@/components/shelf-art";
 import { ErrorNote } from "@/components/kit";
 import { COUNTRIES, PRODUCTS, countryName } from "@/lib/data";
 import { runChecks, firstBlocker } from "@/lib/checks";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { contractOfToken, contractStatus, shelfUnits } from "@/lib/selectors";
@@ -40,7 +40,7 @@ export default function Stock() {
       <div className="mx-auto flex max-w-md flex-col items-center pt-8 text-center">
         <span className="grid h-32 w-24 place-items-center rounded-2xl bg-primary font-display text-5xl font-extrabold text-primary-foreground">A</span>
         <h1 className="font-display mt-6 text-4xl font-bold">Contract first</h1>
-        <p className="mt-3 text-muted-foreground">Token A at {shop.name} is a shelf-use demo record. It turns into a stocked Token B only after the contract is approved and signed by both sides{token.released ? " — this one has ended" : ""}.</p>
+        <p className="mt-3 text-muted-foreground">Token A at {shop.name} is {LIVE ? "your right to use this shelf" : "a shelf-use demo record"}. It turns into a stocked Token B only after the contract is approved and signed by both sides{token.released ? " — this one has ended" : ""}.</p>
         {c && <PrimaryButton className="mt-8" onClick={() => go(`/contracts/${c.id}`)} data-testid="button-open-contract"><FileSignature className="h-4 w-4" />Open contract ({cs})</PrimaryButton>}
       </div>
     </Shell>
@@ -51,9 +51,9 @@ export default function Stock() {
   const STEPS = ["Where is it made?", "What goes on the shelf?", "How many?", "Quick checks"];
   const items = PRODUCTS.map((p) => ({ p, c: runChecks(p, shop, origin) })).filter((x) => x.p.origins.includes(origin));
 
-  const submit = () => {
+  const submit = async () => {
     if (!product) return;
-    const r = act(() => actions.createListing(token.id, {
+    const r = await act(() => actions.createListing(token.id, {
       name: product.name, sku: `${product.id.slice(0, 4).toUpperCase()}-${origin}-${String(Date.now()).slice(-3)}`, category: product.category, description: product.description ?? "",
       color: product.color, origin, retail: product.retail, cost: product.unitCost, taxRate: shop.terms.taxRate, batch: `B-${origin}-${new Date().getFullYear()}`, expiry: product.expiry, initialQty: qty,
     }), "Sent to store owner for approval");

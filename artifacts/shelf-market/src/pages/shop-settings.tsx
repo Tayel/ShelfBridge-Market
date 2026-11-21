@@ -4,7 +4,7 @@ import { Shell, PrimaryButton } from "@/components/shell";
 import { Card, ErrorNote, Field, Notice, Pill, inputCls } from "@/components/kit";
 import { IsoFloor } from "@/components/iso-floor";
 import { PhotoGallery, PhotoUploader } from "@/components/photos";
-import { useStore } from "@/lib/store";
+import { LIVE, isMine, useSession, useStore } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import type { RentalTerms, Shop, ShelfSpec } from "@/lib/types";
@@ -18,6 +18,7 @@ export default function ShopSettings() {
 }
 
 function Form({ shop }: { shop: Shop }) {
+  const session = useSession();
   const { act, error, pending } = useAct();
   const [info, setInfo] = useState({ name: shop.name, address: shop.address, registration: shop.registration, ownerName: shop.ownerName, price: shop.price, floorNote: shop.floorNote, city: shop.city });
   const [shelf, setShelf] = useState<ShelfSpec>(shop.shelf);
@@ -27,7 +28,7 @@ function Form({ shop }: { shop: Shop }) {
 
   const save = () => act(() => actions.updateShop(shop.id, { ...info, photos, price: Number(info.price), shelf: { widthCm: Number(shelf.widthCm), heightCm: Number(shelf.heightCm), depthCm: Number(shelf.depthCm), capacity: Math.floor(Number(shelf.capacity)) }, terms: { ...terms, months: Math.floor(Number(terms.months)), deposit: Number(terms.deposit), taxRate: Number(terms.taxRate), lateFeePct: Number(terms.lateFeePct), graceDays: Math.floor(Number(terms.graceDays)) } }), "Store details saved");
   const n = (v: string) => (v === "" ? 0 : Number(v));
-  const ro = shop.seeded;
+  const ro = !isMine(shop, session) && !session.me?.isAdmin;
 
   return (
     <Shell title={`${shop.name} settings`} back="/owner-dashboard?tab=stores">
@@ -37,7 +38,7 @@ function Form({ shop }: { shop: Shop }) {
       </div>
       <div className="mx-auto mt-5 max-w-3xl space-y-3">
         {isNew && <Notice tone="good">Submitted. Add the details below — they go into every new contract snapshot.</Notice>}
-        {shop.status === "pending" && <Notice tone="warn">Waiting for platform approval. In this demo, switch to the admin view and approve it in the <Link href="/admin?tab=stores" className="underline" data-testid="link-admin-stores">Admin console</Link>.</Notice>}
+        {shop.status === "pending" && <Notice tone="warn">{session.live ? <>Waiting for approval. The InRaf team reviews every new store, and you'll see the decision in your notifications.{session.me?.isAdmin && <> Approve it in the <Link href="/admin?tab=stores" className="underline" data-testid="link-admin-stores">Admin console</Link>.</>}</> : <>Waiting for platform approval. In this demo, switch to the admin view and approve it in the <Link href="/admin?tab=stores" className="underline" data-testid="link-admin-stores">Admin console</Link>.</>}</Notice>}
         {ro && <Notice tone="mute">Sample store — read-only.</Notice>}
       </div>
       <div className="mx-auto mt-6 grid max-w-3xl gap-5">
@@ -47,7 +48,7 @@ function Form({ shop }: { shop: Shop }) {
             <Field label="Store name"><input disabled={ro} value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} className={inputCls} data-testid="input-name" /></Field>
             <Field label="Owner name"><input disabled={ro} value={info.ownerName} onChange={(e) => setInfo({ ...info, ownerName: e.target.value })} className={inputCls} data-testid="input-owner" /></Field>
             <Field label="Address"><input disabled={ro} value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} className={inputCls} data-testid="input-address" /></Field>
-            <Field label="Registration no." hint="Demo value only — don't enter real registration data."><input disabled={ro} value={info.registration} onChange={(e) => setInfo({ ...info, registration: e.target.value })} className={inputCls} data-testid="input-registration" /></Field>
+            <Field label="Registration no." hint={LIVE ? "Your trade licence or commercial registration number. Only you and the InRaf team see it." : "Demo value only — don't enter real registration data."}><input disabled={ro} value={info.registration} onChange={(e) => setInfo({ ...info, registration: e.target.value })} className={inputCls} data-testid="input-registration" /></Field>
           </div>
         </Card>
         <Card className="space-y-4" testId="card-photos">
@@ -83,7 +84,7 @@ function Form({ shop }: { shop: Shop }) {
           {(["maintenance", "display", "liability", "dispute"] as const).map((k) => (
             <Field key={k} label={k[0].toUpperCase() + k.slice(1)}><textarea disabled={ro} rows={2} value={terms[k]} onChange={(e) => setTerms({ ...terms, [k]: e.target.value })} className={inputCls} data-testid={`input-${k}`} /></Field>
           ))}
-          <p className="text-xs text-muted-foreground">Template wording for the demo. Not legal advice; have real terms reviewed for your jurisdiction.</p>
+          <p className="text-xs text-muted-foreground">{LIVE ? "Template wording. Not legal advice; have your terms reviewed for your country." : "Template wording for the demo. Not legal advice; have real terms reviewed for your jurisdiction."}</p>
         </Card>
         <ErrorNote error={error} />
         {!ro && <PrimaryButton disabled={pending} onClick={save} data-testid="button-save-store">Save details</PrimaryButton>}

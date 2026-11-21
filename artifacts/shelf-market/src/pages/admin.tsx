@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 import { buildComplianceFeed } from "@/lib/feed";
 import { FINCRIME_OS_URL, Shell, PageTitle } from "@/components/shell";
 import { Card, Empty, ErrorNote, Notice, Pill, SmallButton, Stat, Tabs, inputCls } from "@/components/kit";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { holderOf } from "@/lib/ops";
@@ -84,7 +84,7 @@ function Finance({ st }: { st: State }) {
         <div className="flex flex-wrap gap-2">
           {view !== "rec" && <SmallButton onClick={exportCsv} testId="button-export-csv"><Download className="h-4 w-4" />Export CSV</SmallButton>}
           <SmallButton onClick={() => downloadBlob(`inraf-shelf-market-feed-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(buildComplianceFeed(st), null, 2), "application/json")} testId="button-export-feed"><Download className="h-4 w-4" />Compliance feed (JSON)</SmallButton>
-          <a href={FINCRIME_OS_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium transition hover:border-primary/40" data-testid="link-fincrime-os">Open In-Raf FinCrime OS ↗</a>
+          {FINCRIME_OS_URL && <a href={FINCRIME_OS_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium transition hover:border-primary/40" data-testid="link-fincrime-os">Open In-Raf FinCrime OS ↗</a>}
         </div>
       </div>
       {view !== "rec" && (
@@ -161,7 +161,7 @@ export default function Admin() {
 
   return (
     <Shell title="Admin console" back="/">
-      <PageTitle title="Admin console" sub="Platform view, derived live from this browser's demo data. Admin actions are simulations, not real permissions.">
+      <PageTitle title="Admin console" sub={LIVE ? "The InRaf team's view of every store, maker, contract and order. Only accounts in ADMIN_EMAILS can act here." : "Platform view, derived live from this browser's demo data. Admin actions are simulations, not real permissions."}>
         <Tabs value={tab} onChange={setTab} options={[
           { id: "overview", label: "Overview" }, { id: "stores", label: "Stores", count: st.shops.filter((s) => s.status === "pending").length },
           { id: "shelves", label: "Shelves" }, { id: "holders", label: "Holders" }, { id: "contracts", label: "Contracts", count: awaiting.length },
@@ -201,13 +201,13 @@ export default function Admin() {
 
         {tab === "holders" && (
           <>
-            <Notice tone="mute">Demo profiles only. No identity documents or bank details are collected or stored; “verification” is a label, not a check.</Notice>
+            <Notice tone="mute">{LIVE ? "No identity documents or bank details are collected; “verification” is a label, not a KYB check. Check businesses yourself before approving." : "Demo profiles only. No identity documents or bank details are collected or stored; “verification” is a label, not a check."}</Notice>
             {st.holders.map((h) => {
               const m = holderMoney(st, h.id);
               const shelves = st.tokens.filter((t) => t.holderId === h.id && !t.released).length;
               return (
                 <Card key={h.id} className="flex flex-wrap items-center gap-3" testId={`row-holder-${h.id}`}>
-                  <div className="min-w-0 flex-1"><p className="font-medium">{h.name}</p><p className="text-xs text-muted-foreground">{h.kind} · {countryName(h.country)} · reg. (demo) {h.registration} · bank: not collected in demo</p></div>
+                  <div className="min-w-0 flex-1"><p className="font-medium">{h.name}</p><p className="text-xs text-muted-foreground">{h.kind} · {countryName(h.country)} · reg.{LIVE ? "" : " (demo)"} {h.registration} · bank: not collected in demo</p></div>
                   <span className="text-xs text-muted-foreground">{shelves} shelves · payable {usd(m.payable)} · settled {usd(m.settled)} · rent paid {usd(m.rentPaid)}</span>
                   <Pill tone={h.verification === "demo-reviewed" ? "good" : "mute"}>{h.verification}</Pill>
                 </Card>

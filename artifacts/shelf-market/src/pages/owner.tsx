@@ -10,7 +10,7 @@ import {
   BUSINESSES, COUNTRIES, CATEGORIES, CANCELLATION, FEATURES, PRICING_LABEL, RESTRICTIONS, SHELF_TYPES,
   businessOf, countryName, categoryLabel, shelfTypeLabel,
 } from "@/lib/data";
-import { usd } from "@/lib/store";
+import { LIVE, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { useToast } from "@/hooks/use-toast";
@@ -100,8 +100,8 @@ export default function Owner() {
   const resize = (w: number, d: number) => set({ width: w, depth: d, bricks: [] });
   const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } };
 
-  const publish = () => {
-    const r = act(() => actions.createShop({
+  const publish = async () => {
+    const r = await act(() => actions.createShop({
       name: f.name.trim(), country: f.country, city: f.city.trim(), location: f.location.trim(), business: f.business,
       width: f.width, depth: f.depth, bricks: f.bricks, tiers: f.tiers, price: f.price, categories: f.cats, restrictions: f.rules, hue, venue: product === "flying" ? "airport" : undefined,
       months: f.months, photos: f.photos,
@@ -109,7 +109,7 @@ export default function Owner() {
         shelfType: f.shelfType, features: f.features, footTraffic: f.footTraffic, sellsWell: f.sellsWell.trim(),
         pricing: f.pricing, salesSharePct: f.pricing === "fixed" ? 0 : f.salesSharePct, instantBook: f.instantBook, cancellation: f.cancellation,
       },
-    }), "Submitted for platform approval (simulated)");
+    }), LIVE ? "Submitted for InRaf approval" : "Submitted for platform approval (simulated)");
     if (r.ok && r.id) { clearDraft(); go(`/owner-dashboard/shops/${r.id}?new=1`); }
   };
   const saveExit = () => { toast({ title: "Draft saved", description: "Open “List a new shop” to carry on." }); go(back); };
@@ -256,13 +256,13 @@ export default function Owner() {
           </motion.div>
         </AnimatePresence>
       </div>
-      {step === STEPS.length - 1 && <div className="mx-auto mt-6 max-w-md space-y-2"><ErrorNote error={error} /><p className="text-center text-xs text-muted-foreground">Next you'll add registration (demo value), shelf dimensions, capacity and rental terms. Stores go live after simulated admin approval.</p></div>}
+      {step === STEPS.length - 1 && <div className="mx-auto mt-6 max-w-md space-y-2"><ErrorNote error={error} /><p className="text-center text-xs text-muted-foreground">{LIVE ? "Next you'll add your business registration, shelf dimensions, capacity and rental terms. The InRaf team reviews every store before it goes live, and you'll see the decision in your notifications." : "Next you'll add registration (demo value), shelf dimensions, capacity and rental terms. Stores go live after simulated admin approval."}</p></div>}
       <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
         {step > 0 && <GhostButton onClick={() => setStep(step - 1)} data-testid="button-prev"><ArrowLeft className="h-4 w-4" /> Back</GhostButton>}
         {step < STEPS.length - 1 ? (
           step > 1 && <PrimaryButton disabled={!valid} onClick={() => setStep(step + 1)} data-testid="button-next">Continue <ArrowRight className="h-4 w-4" /></PrimaryButton>
         ) : (
-          <PrimaryButton onClick={publish} data-testid="button-publish"><Check className="h-4 w-4" /> Submit demo store</PrimaryButton>
+          <PrimaryButton onClick={publish} data-testid="button-publish"><Check className="h-4 w-4" /> {LIVE ? "Submit my store" : "Submit demo store"}</PrimaryButton>
         )}
       </div>
       <div className="mt-6 flex justify-center gap-2">

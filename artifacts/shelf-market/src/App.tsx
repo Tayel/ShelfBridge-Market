@@ -26,6 +26,8 @@ import Start from '@/pages/start';
 import Support from '@/pages/support';
 import Host from '@/pages/host';
 import Saved from '@/pages/saved';
+import SignIn from '@/pages/signin';
+import { useSession } from '@/lib/store';
 import {
   Route,
   Switch,
@@ -65,6 +67,7 @@ function Router() {
         <Route path="/offers/:id" component={Offers} />
         <Route path="/start" component={Start} />
         <Route path="/support" component={Support} />
+        <Route path="/signin" component={SignIn} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
@@ -76,12 +79,25 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+/** Live mode: wait for the first copy of the marketplace from the server before showing pages. */
+function LiveGate({ children }: { children: ReactNode }) {
+  const s = useSession();
+  if (s.loaded && !s.error) return <>{children}</>;
+  return (
+    <div className="grid min-h-[100dvh] place-items-center px-6 text-center" data-testid="live-gate">
+      {s.loaded && s.error
+        ? <div><p className="font-display text-2xl font-bold">InRaf can't load right now</p><p className="mt-2 text-muted-foreground">{s.error}</p><button className="mt-5 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => window.location.reload()}>Try again</button></div>
+        : <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" aria-label="Loading" />}
+    </div>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
+          <LiveGate><Router /></LiveGate>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

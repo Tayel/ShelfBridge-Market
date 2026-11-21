@@ -1,7 +1,22 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "PORT=3000 BASE_PATH=/ NODE_ENV=production vite build --config vite.config.ts",
+  "buildCommand": "PORT=3000 BASE_PATH=/ NODE_ENV=production vite build --config vite.config.ts && node server/build.mjs",
   "outputDirectory": "dist/public",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/handler?route=$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/handler.js": {
+      "includeFiles": "server-dist/**",
+      "maxDuration": 15
+    }
+  }
 }

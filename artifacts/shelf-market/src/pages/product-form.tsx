@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { Check, X } from "lucide-react";
 import { Shell, PrimaryButton } from "@/components/shell";
 import { Card, ErrorNote, Field, ProductImage, inputCls } from "@/components/kit";
-import { useStore } from "@/lib/store";
+import { LIVE, useStore } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { CATEGORIES, COUNTRIES, EXPIRING_WINDOW_DAYS, OFFERS, SWATCHES, categoryLabel, countryName, offerTitle } from "@/lib/data";
@@ -43,9 +43,9 @@ export default function ProductForm() {
   if (!token || !shop) return <Shell title="Not found" back="/dashboard"><p className="mt-20 text-center text-muted-foreground">Shelf not found. <Link href="/dashboard" className="text-primary underline">Holder portal</Link></p></Shell>;
 
   const lockedQty = !!existing && existing.status !== "pending" && existing.status !== "rejected" && existing.status !== "draft";
-  const submit = () => {
+  const submit = async () => {
     const payload: ListingInput = { ...f, imageUrl: f.imageUrl?.trim() || undefined, expiry: f.expiry || undefined, offer: f.offer || undefined, wasPrice: f.offer === "expiring" && f.wasPrice ? Number(f.wasPrice) : undefined, story: f.offer === "flying" ? f.story?.trim() || undefined : undefined, retail: Number(f.retail), cost: Number(f.cost), taxRate: Number(f.taxRate), initialQty: Math.floor(Number(f.initialQty)) };
-    const r = existing ? act(() => actions.updateListing(existing.id, payload), "Product saved") : act(() => actions.createListing(token.id, payload), "Sent to store owner for approval");
+    const r = await (existing ? act(() => actions.updateListing(existing.id, payload), "Product saved") : act(() => actions.createListing(token.id, payload), "Sent to store owner for approval"));
     if (r.ok) go(`/shelf/${token.id}`);
   };
   const num = (k: "retail" | "cost" | "taxRate" | "initialQty") => (e: React.ChangeEvent<HTMLInputElement>) => set(k, e.target.value === "" ? 0 : Number(e.target.value));
@@ -94,7 +94,7 @@ export default function ProductForm() {
             <div className="flex flex-wrap gap-2">
               {SWATCHES.map((c) => <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={f.color === c && !f.imageUrl} onClick={() => { set("color", c); set("imageUrl", ""); }} className={`h-8 w-8 rounded-full ring-offset-2 transition ${f.color === c && !f.imageUrl ? "ring-2 ring-primary" : ""}`} style={{ background: c }} data-testid={`swatch-${c.slice(1)}`} />)}
             </div>
-            <input value={f.imageUrl ?? ""} onChange={(e) => set("imageUrl", e.target.value)} className={`${inputCls} mt-2`} placeholder="…or a short https:// image URL (no uploads in this demo)" data-testid="input-image-url" />
+            <input value={f.imageUrl ?? ""} onChange={(e) => set("imageUrl", e.target.value)} className={`${inputCls} mt-2`} placeholder={LIVE ? "…or a short https:// image URL" : "…or a short https:// image URL (no uploads in this demo)"} data-testid="input-image-url" />
           </div>
           <ErrorNote error={error} />
           <PrimaryButton disabled={pending} onClick={submit} data-testid="button-save-product">{existing ? "Save changes" : "Submit for owner approval"}</PrimaryButton>
@@ -112,7 +112,7 @@ export default function ProductForm() {
             <ul className="mt-2 space-y-1.5 text-sm" data-testid="list-checks">
               {checks.map((c) => <li key={c.id} className="flex items-start gap-2"><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ${c.ok ? "bg-secondary text-secondary-foreground" : "bg-destructive/10 text-destructive"}`}>{c.ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}</span>{c.text}</li>)}
             </ul>
-            <p className="mt-2 text-xs text-muted-foreground">Demonstrative only. Not legal, customs or regulatory clearance. Capacity is enforced; the others inform the owner's decision.</p>
+            <p className="mt-2 text-xs text-muted-foreground">{LIVE ? "For the store owner's review only." : "Demonstrative only."} Not legal, customs or regulatory clearance. Capacity is enforced; the others inform the owner's decision.</p>
           </Card>
         </div>
       </div>

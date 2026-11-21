@@ -69,6 +69,8 @@ export const isProductId = (x: unknown): x is ProductId => x === "expiring" || x
  */
 export const PRODUCT_JOURNEY: Record<ProductId, {
   title: string; headline: [string, string]; summary: string; image: string; illustration: string; imageAlt: string;
+  /** Promo video: a small muted preview played on hover/tap, and the full version for the larger player. */
+  video: { preview: string; full: string; label: string };
   steps: { title: string; text: string }[]; motto: string; pillars: string[];
   owner: { pitch: string; who: string; promises: { title: string; text: string }[]; faq: [string, string][]; cta: string };
   holder: { title: string; pitch: string; who: string; promises: { title: string; text: string }[]; cta: string };
@@ -79,6 +81,7 @@ export const PRODUCT_JOURNEY: Record<ProductId, {
     summary: "Local factories place soon-to-expire stock on neighbourhood shelves at lower prices, turning waste into shared value.",
     image: "images/product-expire.jpg",
     illustration: "images/near-date-grocery.jpg",
+    video: { preview: "videos/about-to-expire-preview.mp4", full: "videos/about-to-expire.mp4", label: "About to Expire promotional video" },
     imageAlt: "About to Expire: a neighbourhood grocery with an About to Expire shelf, and the four steps — identify stock, price wisely, place locally, rescue and share.",
     motto: "Source. Price. Place. Save.",
     steps: [
@@ -122,6 +125,7 @@ export const PRODUCT_JOURNEY: Record<ProductId, {
     summary: "A group-funded airport retail business that showcases national products, supports local manufacturers and shares the rewards.",
     image: "images/product-fly-inside.jpg",
     illustration: "images/airport-kiosk.jpg",
+    video: { preview: "videos/about-to-fly-preview.mp4", full: "videos/about-to-fly.mp4", label: "About to Fly Inside promotional video" },
     imageAlt: "About to Fly Inside: a Made in Our Country shop at an airport gate, and the four steps — group fund, source local, retail together, manage and share.",
     motto: "Pool. Purchase. Showcase. Share the success.",
     steps: [

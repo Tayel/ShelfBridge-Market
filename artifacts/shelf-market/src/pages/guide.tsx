@@ -3,7 +3,7 @@ import { Shell, PageTitle } from "@/components/shell";
 import { Card, SmallButton } from "@/components/kit";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
-import { useStore } from "@/lib/store";
+import { LIVE, useStore } from "@/lib/store";
 import { PRIORITY_COUNTRIES } from "@/lib/data";
 
 const STEPS: [string, string, string][] = [
@@ -17,6 +17,57 @@ const STEPS: [string, string, string][] = [
 ];
 
 export default function Guide() {
+  if (LIVE) return <LiveGuide />;
+  return <DemoGuide />;
+}
+
+const LIVE_STEPS: [string, string, string, string][] = [
+  ["Store owner", "Sign in with your email, list your shop with photos of the front and the shelf, your business registration, shelf size and rental terms.", "/start?as=owner", "List your shop"],
+  ["InRaf team", "We review every new store before it's shown on InRaf. You'll see the decision in your notifications.", "/notifications", "Notifications"],
+  ["Maker", "Sign in, find a shelf near your customers and request it. The request becomes a contract with a fixed version of the terms.", "/start?as=holder", "Find a shelf"],
+  ["Both sides", "InRaf approves the contract, then the store owner and the maker each sign it. The shelf is yours once all three are done.", "/dashboard?tab=contracts", "Your contracts"],
+  ["Maker", "Add your products with batch, expiry, tax and quantity. The store owner approves them, then you put them on sale.", "/dashboard", "Holder portal"],
+  ["Shopper", "Scan the QR on the shelf or browse online, pick a quantity and check out. No account needed.", "/scan", "Scan a shelf"],
+];
+
+function LiveGuide() {
+  return (
+    <Shell title="How InRaf works" back="/">
+      <PageTitle title="How InRaf works" sub={`Neighbourhood shops rent out empty shelves; small makers stock them and sell. Open in ${PRIORITY_COUNTRIES.map((c) => c.name).join(", ")}.`} />
+      <div className="mx-auto mt-8 max-w-3xl space-y-6">
+        <Card>
+          <p className="font-display text-xl font-bold">From empty shelf to first sale</p>
+          <ol className="mt-3 space-y-3 text-sm">
+            {LIVE_STEPS.map(([who, what, href, cta], i) => (
+              <li key={i} className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{i + 1}</span><span><b>{who}.</b> {what} <Link href={href} className="text-primary underline">{cta}</Link></span></li>
+            ))}
+          </ol>
+        </Card>
+        <Card>
+          <p className="font-display text-xl font-bold">Accounts and privacy</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            <li>No passwords. You sign in with a one-time link sent to your email.</li>
+            <li>Your name is shown to the store owners and makers you deal with. Business registration numbers are only seen by you and the InRaf team.</li>
+            <li>Contracts, invoices, orders and earnings are only visible to the people involved and the InRaf team.</li>
+          </ul>
+        </Card>
+        <Card className="border-amber-500/30">
+          <p className="font-display text-xl font-bold">Still simulated</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            <li><b>No money moves yet.</b> Rent, sales, refunds and payouts are recorded, but no card is charged and nothing is paid out. References starting “SIMULATED-” are not payment IDs.</li>
+            <li><b>Signatures.</b> Typed names record agreement on InRaf but are not certified electronic signatures. Contract wording is a template.</li>
+            <li><b>Tax and fees.</b> Percentages are illustrative, not tax or legal advice for any country.</li>
+            <li><b>Tokens</b> are a record of the right to use a shelf, not crypto or an investment.</li>
+            <li><b>Sample stores</b> are shown as examples and can't be rented. Their reviews and ratings are made up.</li>
+          </ul>
+        </Card>
+        <p className="text-center text-sm text-muted-foreground">Questions? <Link href="/support" className="text-primary underline">Help & refunds</Link></p>
+      </div>
+    </Shell>
+  );
+}
+
+function DemoGuide() {
   const st = useStore();
   const { act, error } = useAct();
   return (

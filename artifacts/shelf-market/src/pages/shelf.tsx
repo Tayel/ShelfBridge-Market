@@ -5,7 +5,7 @@ import { Shell } from "@/components/shell";
 import { Card, Empty, ErrorNote, Modal, Notice, Pill, ProductImage, SmallButton, Field, inputCls } from "@/components/kit";
 import { ShelfQr } from "@/components/qr";
 import { OfferPill } from "@/components/offer-bits";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { contractOfToken, contractStatus, expiresSoon, isExpired, isLowStock, reservedQty, shelfBlockReason, shelfLabel, shelfUnits } from "@/lib/selectors";
@@ -94,14 +94,14 @@ export default function ShelfPage() {
               </Card>
             );
           })}
-          <p className="text-xs text-muted-foreground">*Tax rates are illustrative demo values only.</p>
+          <p className="text-xs text-muted-foreground">*Tax rates are illustrative values only.</p>
         </div>
 
         <div className="space-y-4">
           <Card testId="card-qr">
             <p className="flex items-center gap-2 font-display text-lg font-bold"><QrCode className="h-4 w-4 text-primary" />Shelf QR</p>
             <p className="mt-1 text-sm text-muted-foreground">Links to this shelf's catalog only.</p>
-            <Notice tone="warn" testId="text-same-browser-warning"><b>Same-browser demo.</b> Inventory lives in this browser's storage. A phone scanning this code opens the page, but sees its own empty copy — not this shelf's live stock.</Notice>
+            {!LIVE && <Notice tone="warn" testId="text-same-browser-warning"><b>Same-browser demo.</b> Inventory lives in this browser's storage. A phone scanning this code opens the page, but sees its own empty copy — not this shelf's live stock.</Notice>}
             <div className="mt-4">{showQr ? <ShelfQr tokenId={token.id} label={label} size={200} /> : <SmallButton onClick={() => setShowQr(true)} testId="button-show-qr">Show QR code</SmallButton>}</div>
             <Link href={`/catalog/${token.id}`} className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-border py-2 text-sm font-medium hover:bg-muted" data-testid="link-open-catalog">Open catalog here</Link>
           </Card>
@@ -120,7 +120,7 @@ export default function ShelfPage() {
       <Modal open={!!restock} onClose={() => setRestock(null)} title="Restock (simulated)">
         <Field label="Units to add" hint={`Free capacity: ${Math.max(0, shop.shelf.capacity - used)} units`}><input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className={inputCls} data-testid="input-restock" /></Field>
         <div className="mt-3"><ErrorNote error={error} /></div>
-        <SmallButton tone="solid" disabled={pending} onClick={() => { if (restock) { const r = act(() => actions.restockListing(restock, qty), "Restocked"); if (r.ok) setRestock(null); } }} testId="button-confirm-restock">Add units</SmallButton>
+        <SmallButton tone="solid" disabled={pending} onClick={async () => { if (restock) { const r = await act(() => actions.restockListing(restock, qty), "Restocked"); if (r.ok) setRestock(null); } }} testId="button-confirm-restock">Add units</SmallButton>
       </Modal>
     </Shell>
   );

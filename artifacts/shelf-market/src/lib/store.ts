@@ -1,15 +1,17 @@
 /**
- * Browser-only demo store (localStorage). Not production-safe:
- * - No server, no multi-device sync: other phones/browsers see their own copy.
- * - Cross-tab: tabs refresh on the `storage` event and every mutation re-reads
- *   the latest saved state before applying guards, but there are no true locks.
+ * The marketplace store, in one of two modes (chosen at build time by VITE_BACKEND):
+ * - "api" (live): the shared marketplace lives on the server (server/handler.ts). The page loads the part
+ *   this person may see, refreshes it every 20 s and on focus, and sends each action to the server, which
+ *   checks permissions and applies it.
+ * - otherwise, the browser-only demo (localStorage): every phone or browser has its own copy, nothing is shared.
  */
 import { useSyncExternalStore } from "react";
-import type { Contract, ContractVersion, Listing, Result, Role, Shop, State, Token } from "./types";
-import { DemoError, YOU_HOLDER, _internal, audit, shopDefaults } from "./ops";
-import { LEGACY_SEEDS, SEED_HOLDERS, SEED_SHOPS, emptyState, seedOffers, seedState } from "./seed";
-import { PRODUCTS } from "./data";
-import { nowIso, today, uid } from "./util";
+import type { Result, Role, State } from "./types";
+import { emptyState } from "./seed";
+import { DemoError, YOU_HOLDER } from "./ops";
+import { seedOffers, seedState } from "./seed";
+import { normalize, migrateV1 } from "./state";
+import { nowIso, today } from "./util";
 
 export type { Shop, Token, State } from "./types";
 export { usd } from "./util";
@@ -17,89 +19,6 @@ export { slotsOf, takenSlots } from "./selectors";
 
 const KEY = "inraf-demo-v2";
 const V1_KEY = "shelf-demo-v1"; // read for migration; never deleted
-
-const arr = <T,>(x: unknown): T[] => (Array.isArray(x) ? (x as T[]) : []);
-
-/** Fill any missing fields so older or partially-written data never crashes the UI. */
-function normalize(raw: Partial<State>): State {
-  const base = emptyState();
-  const s: State = {
-    ...base,
-    role: (["owner", "holder", "customer", "admin"] as Role[]).includes(raw.role as Role) ? (raw.role as Role) : "holder",
-    // Seeded shops saved before listing attributes or photos existed pick them up from the seed.
-    shops: arr<Shop>(raw.shops).filter((x) => x && x.id).map((x) => {
-      const seed = x.seeded ? SEED_SHOPS.find((y) => y.id === x.id) : undefined;
-      return shopDefaults({ ...x, listing: x.listing ?? seed?.listing, photos: x.photos ?? seed?.photos });
-    }),
-    tokens: arr<Token>(raw.tokens).filter((t) => t && t.id),
-    holders: arr(raw.holders),
-    contracts: arr(raw.contracts),
-    invoices: arr(raw.invoices),
-    listings: arr(raw.listings),
-    orders: arr(raw.orders),
-    ledger: arr(raw.ledger),
-    notifications: arr(raw.notifications),
-    audit: arr(raw.audit),
-    saved: arr<string>(raw.saved).filter((x) => typeof x === "string"),
-    seq: typeof raw.seq === "number" ? raw.seq : 0,
-    migratedFromV1: raw.migratedFromV1,
-    offersSeeded: raw.offersSeeded,
-    airportsSeeded: raw.airportsSeeded,
-  };
-  SEED_HOLDERS.forEach((h) => { if (!s.holders.some((x) => x.id === h.id)) s.holders.push({ ...h }); });
-  s.tokens = s.tokens.map((t) => ({ ...t, sold: t.sold ?? 0, revenue: t.revenue ?? 0, sales: t.sales ?? [], holderId: t.holderId ?? YOU_HOLDER, contractId: t.contractId ?? "", stage: t.stage ?? "A" }));
-  // Any token without a contract gets a transparent migrated contract (no signatures fabricated).
-  s.tokens.forEach((t) => {
-    if (t.contractId && s.contracts.some((c) => c.id === t.contractId)) return;
-    const shop = s.shops.find((x) => x.id === t.shopId);
-    if (!shop) return;
-    const holder = s.holders.find((h) => h.id === t.holderId) ?? s.holders[0];
-    const start = (t.createdAt ?? nowIso()).slice(0, 10);
-    const v: ContractVersion = {
-      v: 1, kind: "migrated", createdAt: nowIso(), status: "awaiting",
-      snapshot: _internal.snapshot(s, shop, t, holder, start, shop.terms.months, t.rent ?? shop.price),
-      note: "Migrated from an earlier demo rental. No approval or signatures were recorded then, so none are shown here.",
-    };
-    const c: Contract = { id: uid("ctr"), ref: _internal.nextRef(s, "CTR"), tokenId: t.id, shopId: shop.id, holderId: holder.id, versions: [v], createdAt: nowIso() };
-    s.contracts.push(c); t.contractId = c.id;
-    audit(s, "System", "contract.migrated", c.ref, "Earlier rental converted to contract awaiting admin approval and both signatures; sales blocked until active");
-    s.notifications.push({ id: uid("ntf"), at: nowIso(), role: "holder", title: "Rental needs a contract", body: `${shop.name}: your earlier rental now needs admin approval and both signatures before sales.`, link: `/contracts/${c.id}`, read: false });
-  });
-  // Legacy single-product tokens become listings.
-  s.tokens.forEach((t) => {
-    if (!t.productId || s.listings.some((l) => l.tokenId === t.id)) return;
-    const p = PRODUCTS.find((x) => x.id === t.productId);
-    if (!p) return;
-    const shop = s.shops.find((x) => x.id === t.shopId);
-    const status: Listing["status"] = t.stage === "requested" ? "pending" : t.stage === "rejected" ? "rejected" : "approved";
-    s.listings.push({
-      id: uid("lst"), tokenId: t.id, shopId: t.shopId, holderId: t.holderId, name: p.name, sku: `${p.id.slice(0, 4).toUpperCase()}-${t.origin ?? "XX"}-L1`,
-      category: p.category, description: p.description ?? "", color: p.color, origin: t.origin ?? "", retail: p.retail, cost: p.unitCost,
-      taxRate: shop?.terms.taxRate ?? 10, batch: "LEGACY", expiry: p.expiry, initialQty: t.qty ?? 0, available: Math.max(0, (t.qty ?? 0) - t.sold),
-      sold: t.sold, returned: 0, status, statusNote: t.stage === "B" ? "Migrated stock — activate after contract is active" : undefined,
-      createdAt: t.createdAt ?? nowIso(), updatedAt: nowIso(), legacyRevenue: t.revenue,
-    });
-  });
-  if (!s.migratedFromV1 && s.shops.length === 0) return seedState();
-  return s;
-}
-
-function migrateV1(v1: { shops?: Shop[]; tokens?: Token[] }): State {
-  const seeded = seedState();
-  const oldShops = arr<Shop>(v1.shops);
-  const oldTokens = arr<Token>(v1.tokens);
-  const userShops = oldShops.filter((x) => !x.seeded).map((x) => shopDefaults({ ...x, status: "approved", statusNote: "Carried over from the earlier demo where listings were public." }));
-  const referenced = new Set(oldTokens.map((t) => t.shopId));
-  const seededIds = new Set(SEED_SHOPS.map((x) => x.id));
-  const legacy = LEGACY_SEEDS.filter((x) => referenced.has(x.id) && !seededIds.has(x.id));
-  const merged: Partial<State> = {
-    ...seeded,
-    shops: [...seeded.shops, ...legacy, ...userShops],
-    tokens: [...seeded.tokens, ...oldTokens.map((t) => ({ ...t, holderId: YOU_HOLDER, contractId: "" }))],
-    migratedFromV1: nowIso(),
-  };
-  return normalize(merged);
-}
 
 /** Saves from before the special offers existed get their sample stock once, without new unread notices. */
 function withOffers(s: State): State {
@@ -130,7 +49,9 @@ function load(): State {
   return s;
 }
 
-let state: State = load();
+export const LIVE = import.meta.env.VITE_BACKEND === "api";
+
+let state: State = LIVE ? emptyState() : load();
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
@@ -168,6 +89,109 @@ export function run(fn: (draft: State) => string | void): Result {
   }
 }
 
+// ---------------------------------------------------------------- live mode (shared server)
+
+export interface Me { id: string; email: string; name: string; isAdmin: boolean; holderId: string }
+export type ApiResult = Result & { code?: string };
+
+const ROLE_KEY = "inraf-view-role";
+const roles: Role[] = ["owner", "holder", "customer", "admin"];
+const storedRole = (): Role => { try { const r = localStorage.getItem(ROLE_KEY) as Role; return roles.includes(r) ? r : "holder"; } catch { return "holder"; } };
+let me: Me | null = null;
+let loaded = !LIVE;
+let loadError: string | null = null;
+let everLoaded = false; // after the first good load, a failed refresh keeps showing the last copy
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function api<T>(path: string, init?: RequestInit): Promise<T & { ok?: boolean; error?: string; code?: string }> {
+  const r = await fetch(`${base}/api${path}`, { credentials: "same-origin", ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+  const body = await r.json().catch(() => ({ ok: false, error: `The server answered ${r.status}.` }));
+  return body;
+}
+
+function adopt(next: State, nextMe?: Me | null) {
+  if (nextMe !== undefined) me = nextMe;
+  let role = storedRole();
+  if (role === "admin" && !me?.isAdmin) role = "holder";
+  state = normalizeView({ ...next, role });
+  loaded = true; loadError = null; everLoaded = true;
+  emit();
+}
+/** The server sends only what this person may see; fill any gaps so pages never crash. */
+const normalizeView = (s: State): State => ({ ...emptyState(), ...s });
+
+/** Fetch the latest view of the marketplace from the server. */
+export async function refresh() {
+  if (!LIVE) return;
+  try {
+    const r = await api<{ me: Me | null; state: State }>("/state");
+    if (r.state) adopt(r.state, r.me);
+    else if (!everLoaded) { loadError = r.error ?? "Couldn't load the marketplace."; loaded = true; emit(); }
+  } catch {
+    if (!everLoaded) { loadError = "You're offline or the server can't be reached."; loaded = true; emit(); }
+  }
+}
+
+if (LIVE && typeof window !== "undefined") {
+  void refresh();
+  window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 20_000);
+  window.addEventListener("focus", () => void refresh());
+}
+
+/** Live mode: send one action to the server. Browser-only mode: apply it here. */
+export async function call(name: string, args: unknown[], local: (d: State) => string | void): Promise<ApiResult> {
+  if (!LIVE) return run(local);
+  if (busy) return { ok: false, error: "Another action is still being applied. Try again." };
+  busy = true;
+  try {
+    const r = await api<{ id?: string; state?: State }>(`/actions/${name}`, { method: "POST", body: JSON.stringify({ args }) });
+    if (r.state) adopt(r.state);
+    if (r.ok) return { ok: true, id: r.id };
+    return { ok: false, error: r.error ?? "That didn't work.", code: r.code };
+  } catch {
+    return { ok: false, error: "You're offline or the server can't be reached. Nothing was changed." };
+  } finally {
+    busy = false;
+  }
+}
+
+/** The view selector is a lens on the page, kept in this browser; the server decides what you may do. */
+export function setViewRole(role: Role) {
+  if (!LIVE) return run((d) => { d.role = role; });
+  try { localStorage.setItem(ROLE_KEY, role); } catch { /* ignore */ }
+  state = { ...state, role }; emit();
+  return { ok: true } as Result;
+}
+
+export const auth = {
+  async requestLink(email: string, name: string, next: string) {
+    return api<{ devLink?: string }>("/auth/request", { method: "POST", body: JSON.stringify({ email, name, next }) });
+  },
+  async logout() {
+    await api("/auth/logout", { method: "POST", body: "{}" });
+    me = null; await refresh();
+  },
+  async setName(name: string) {
+    const r = await api<{ me?: Me }>("/me/name", { method: "POST", body: JSON.stringify({ name }) });
+    if (r.me) { me = r.me; await refresh(); }
+    return r;
+  },
+};
+
+export interface Session { live: boolean; loaded: boolean; error: string | null; me: Me | null; holderId: string }
+let session: Session = { live: LIVE, loaded, error: loadError, me, holderId: YOU_HOLDER };
+const getSession = () => {
+  const holderId = LIVE ? (me?.holderId ?? "\u0000") : YOU_HOLDER;
+  if (session.loaded !== loaded || session.error !== loadError || session.me !== me || session.holderId !== holderId) session = { live: LIVE, loaded, error: loadError, me, holderId };
+  return session;
+};
+/** Who is using the site: in live mode the signed-in account (or null); in the demo, the sample "you". */
+export function useSession(): Session {
+  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, getSession);
+}
+/** Is this store yours? Live: you own the account that listed it. Demo: any store that isn't a sample. */
+export const isMine = (shop: { seeded: boolean; ownerUserId?: string }, s: Session) => (s.live ? !!s.me && shop.ownerUserId === s.me.id : !shop.seeded);
+
 export function useStore(): State {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => state);
 }
@@ -175,6 +199,7 @@ export const getState = () => state;
 
 /** Explicit, user-confirmed reset of the v2 demo data. The original v1 key is left untouched. */
 export function resetDemo(): Result {
+  if (LIVE) return { ok: false, error: "Resetting isn't available on the live site." };
   return run((d) => { const fresh = seedState(); Object.assign(d, fresh); });
 }
 

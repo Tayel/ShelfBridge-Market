@@ -14,11 +14,11 @@ import {
   CANCELLATION, CATEGORIES, PREMIUM_TOKEN_NOTE, PRICING_LABEL, RESTRICTIONS, SHELF_TYPES, businessOf, categoryLabel, countryName, featureLabel,
 } from "@/lib/data";
 import { SUB_SCORES, isFavourite, ratingOf, reviewsOf } from "@/lib/reviews";
-import { slotsOf, takenSlots, useStore, usd } from "@/lib/store";
+import { LIVE, slotsOf, takenSlots, useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { useToast } from "@/hooks/use-toast";
-import { holderOf, rentOf, YOU_HOLDER } from "@/lib/ops";
+import { holderOf, rentOf } from "@/lib/ops";
 import { addMonths, fmtDate, round2, today } from "@/lib/util";
 import type { Shop } from "@/lib/types";
 
@@ -44,6 +44,7 @@ export default function ShopDetail() {
   const { id } = useParams<{ id: string }>();
   const params = new URLSearchParams(useSearch());
   const st = useStore();
+  const { holderId: YOU_HOLDER, me: account, live } = useSession();
   const [, go] = useLocation();
   const { toast } = useToast();
   const shop = st.shops.find((s) => s.id === id);
@@ -81,17 +82,17 @@ export default function ShopDetail() {
   const lengths = [...new Set([T.months, 3, 6, 12, 24].filter((m) => m >= T.months))].sort((a, b) => a - b);
   const banned = CATEGORIES.filter((c) => !shop.categories.includes(c.id));
 
-  const request = () => {
+  const request = async () => {
     if (bi < 0 || tier === null) return;
-    const r = act(() => actions.requestContract({ shopId: shop.id, slot: slot(bi, tier), holderId: YOU_HOLDER, start, months: term }), "Contract request created");
+    const r = await act(() => actions.requestContract({ shopId: shop.id, slot: slot(bi, tier), holderId: YOU_HOLDER, start, months: term }), "Contract request created");
     if (r.ok && r.id) go(`/contracts/${r.id}`);
   };
   const share = async () => {
     try { await navigator.clipboard.writeText(window.location.href); toast({ title: "Link copied" }); }
     catch { toast({ title: "Couldn't copy the link", description: window.location.href }); }
   };
-  const sendReport = () => {
-    const r = act(() => actions.reportShop(shop.id, reason), "Report sent to the platform (simulated)");
+  const sendReport = async () => {
+    const r = await act(() => actions.reportShop(shop.id, reason), "Report sent to the platform (simulated)");
     if (r.ok) { setReport(false); setReason(""); }
   };
 
@@ -204,7 +205,7 @@ export default function ShopDetail() {
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-xs text-muted-foreground">Sample reviews for the demo. In the real product only renters with a completed contract can review, and shops review renters too.</p>
+                <p className="mt-4 text-xs text-muted-foreground">{LIVE ? "Sample reviews on an example store. Only renters with a completed contract can review." : "Sample reviews for the demo. In the real product only renters with a completed contract can review, and shops review renters too."}</p>
               </>
             ) : (
               <>
@@ -253,7 +254,7 @@ export default function ShopDetail() {
                 <p className="mt-2 text-muted-foreground">{CANCELLATION[L.cancellation].text}</p>
               </div>
             </div>
-            <p className="mt-6 text-xs text-muted-foreground">Registration: {shop.registration} (demo value)</p>
+            {(!live || shop.registration) && <p className="mt-6 text-xs text-muted-foreground">Registration: {shop.registration}{live ? "" : " (demo value)"}</p>}
             <button onClick={() => setReport(true)} className="mt-2 inline-flex items-center gap-1.5 text-sm underline" data-testid="button-report"><Flag className="h-3.5 w-3.5" />Report this listing</button>
           </section>
         </div>
@@ -302,7 +303,7 @@ export default function ShopDetail() {
 
       <Modal open={confirm} onClose={() => setConfirm(false)} title={L.instantBook ? "Book this shelf" : "Request a contract"}>
         <p className="text-sm text-muted-foreground">
-          Shelf {tier !== null ? tier + 1 : ""} at {shop.name}, as <b>{holderOf(st, YOU_HOLDER).name}</b>.{" "}
+          Shelf {tier !== null ? tier + 1 : ""} at {shop.name}, as <b>{live ? (account ? account.name || account.email : "you (you'll sign in next)") : holderOf(st, YOU_HOLDER).name}</b>.{" "}
           {L.instantBook ? "This shop uses Instant book, so the owner's agreement is recorded straight away. The platform check and your signature are still needed." : "Nothing is active until the platform approves and both of you sign."}
         </p>
         <div className="mt-4 space-y-1 text-sm">

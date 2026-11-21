@@ -1,7 +1,7 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
@@ -27,12 +27,31 @@ if (!basePath) {
   );
 }
 
+/** Serve the API from the dev server too (same code as the Vercel function), with server-only env from .env files. */
+function api(): Plugin {
+  return {
+    name: 'inraf-api',
+    configureServer(server) {
+      const env = loadEnv(server.config.mode, import.meta.dirname, '');
+      for (const [k, v] of Object.entries(env)) if (!(k in process.env)) process.env[k] = v;
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/')) return next();
+        try {
+          const mod = await server.ssrLoadModule('/server/handler.ts');
+          await mod.default(req, res);
+        } catch (e) { next(e); }
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    api(),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
       ? [

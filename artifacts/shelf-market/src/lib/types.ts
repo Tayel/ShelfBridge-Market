@@ -31,6 +31,8 @@ export interface Shop {
   /** "airport": a shop inside an airport, where About to Fly Inside shelves live. Absent: a neighbourhood shop. */
   venue?: "airport";
   photos: ShopPhoto[];
+  /** Live mode: the account that owns this store. Absent on samples and in the browser-only demo. */
+  ownerUserId?: string;
 }
 
 export type PhotoKind = "front" | "inside" | "shelf";
@@ -150,6 +152,8 @@ export interface Order {
   createdAt: string; authorizedAt?: string; capturedAt?: string; failedAt?: string; cancelledAt?: string;
   payoutRequestedAt?: string; settledAt?: string; payoutFailedAt?: string; refundedAt?: string;
   stockDeducted: boolean;
+  /** Live mode: who placed the order (`u:<account>` or `v:<visitor>`). */
+  buyerId?: string;
   refund?: { status: "requested" | "approved" | "rejected"; reason: string; requestedAt: string; decidedAt?: string; restocked?: boolean; note?: string };
 }
 
@@ -168,7 +172,11 @@ export interface LedgerEntry {
   memo: string;
 }
 
-export interface Notice { id: string; at: string; role: Role; title: string; body: string; link?: string; read: boolean; }
+export interface Notice {
+  id: string; at: string; role: Role; title: string; body: string; link?: string; read: boolean;
+  /** Live mode: the accounts this notice is for (admin notices go to every admin). Absent in the browser-only demo. */
+  userIds?: string[];
+}
 export interface AuditEntry { id: string; at: string; actor: string; action: string; ref: string; detail: string; }
 
 export interface State {

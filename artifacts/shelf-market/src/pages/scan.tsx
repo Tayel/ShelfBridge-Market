@@ -5,7 +5,7 @@ import { Shell, PageTitle } from "@/components/shell";
 import { Card, Empty, Pill } from "@/components/kit";
 import { ShelfQr } from "@/components/qr";
 import { SameBrowserBanner } from "@/pages/catalog";
-import { useStore } from "@/lib/store";
+import { LIVE, useStore } from "@/lib/store";
 import { shelfBlockReason, shelfLabel } from "@/lib/selectors";
 import { countryName } from "@/lib/data";
 
@@ -19,7 +19,7 @@ export default function Scan() {
   ));
   return (
     <Shell title="Scan a shelf">
-      <PageTitle title="Scan a shelf" sub="In a real store you'd scan the code on the shelf. Here, pick one of the demo shelves — or open its QR and scan it with this device." />
+      <PageTitle title="Scan a shelf" sub={LIVE ? "Scan the QR code on the shelf with your phone camera, or pick a shelf below." : "In a real store you'd scan the code on the shelf. Here, pick one of the demo shelves — or open its QR and scan it with this device."} />
       <div className="mx-auto mt-6 max-w-2xl"><SameBrowserBanner /></div>
       <div className="mx-auto mt-6 grid max-w-3xl gap-4 sm:grid-cols-2">
         {shelves.length === 0 && <div className="sm:col-span-2"><Empty title="No shelves selling yet" text="Shelves appear here once a contract is active and a product is on sale." /></div>}

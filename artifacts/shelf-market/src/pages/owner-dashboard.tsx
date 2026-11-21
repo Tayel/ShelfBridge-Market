@@ -6,7 +6,7 @@ import { ShelfArt } from "@/components/shelf-art";
 import { IsoFloor } from "@/components/iso-floor";
 import { Card, Empty, ErrorNote, Pill, ProductImage, SmallButton, Stat, Tabs } from "@/components/kit";
 import { categoryLabel, countryName } from "@/lib/data";
-import { useStore, usd } from "@/lib/store";
+import { isMine, useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { holderOf } from "@/lib/ops";
@@ -15,14 +15,15 @@ import { daysUntil, fmtDate, round2 } from "@/lib/util";
 
 export default function OwnerDashboard() {
   const st = useStore();
+  const session = useSession();
   const [, go] = useLocation();
   const search = useSearch();
   const [tab, setTab] = useState(new URLSearchParams(search).get("tab") ?? "todo");
-  const own = st.shops.filter((s) => !s.seeded);
-  const [samples, setSamples] = useState(own.length === 0);
+  const own = st.shops.filter((s) => isMine(s, session));
+  const [samples, setSamples] = useState(own.length === 0 && !session.live);
   const { act, error, pending } = useAct();
 
-  const shops = st.shops.filter((s) => !s.seeded || samples);
+  const shops = st.shops.filter((s) => isMine(s, session) || (s.seeded && samples));
   const ids = new Set(shops.map((s) => s.id));
   const contracts = st.contracts.filter((c) => ids.has(c.shopId));
   const toSign = contracts.filter((c) => { const v = awaitingVersion(c); return v && !c.terminatedAt && !v.ownerSig; });
@@ -35,8 +36,8 @@ export default function OwnerDashboard() {
 
   return (
     <Shell title="Owner portal" back="/">
-      <PageTitle title="My shop" sub="Store-owner view. Your stores are yours to sign; sample stores use simulated owner actions.">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={samples} onChange={(e) => setSamples(e.target.checked)} data-testid="checkbox-samples" />Include sample stores (simulated owners)</label>
+      <PageTitle title="My shop" sub={session.live ? "Your stores, the shelves you rent out, and requests waiting for you." : "Store-owner view. Your stores are yours to sign; sample stores use simulated owner actions."}>
+        {!session.live && <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={samples} onChange={(e) => setSamples(e.target.checked)} data-testid="checkbox-samples" />Include sample stores (simulated owners)</label>}
         <Tabs value={tab} onChange={setTab} options={[{ id: "todo", label: "To do", count: toSign.length + products.length }, { id: "shelves", label: "Shelves" }, { id: "rent", label: "Rent" }, { id: "stores", label: "Stores", count: expiring.length }]} />
       </PageTitle>
       <div className="mx-auto mt-6 max-w-4xl"><ErrorNote error={error} /></div>
@@ -169,11 +170,11 @@ export default function OwnerDashboard() {
                     <div className="mt-1 flex gap-2"><Pill testId={`status-store-${s.id}`}>{s.status}</Pill>{s.seeded && <Pill tone="mute">sample</Pill>}</div>
                     {s.statusNote && <p className="mt-1 text-xs text-muted-foreground">{s.statusNote}</p>}
                   </div>
-                  {!s.seeded && (
+                  {isMine(s, session) && (
                     <div className="flex gap-1">
                       <Link href={`/owner-dashboard/shops/${s.id}`} aria-label="Edit store" className="rounded-full p-2 text-muted-foreground hover:bg-muted" data-testid={`link-edit-${s.id}`}><Pencil className="h-4 w-4" /></Link>
                       <button aria-label="Remove listing" disabled={rented > 0} title={rented ? "Has rentals on record" : "Remove"}
-                        onClick={() => { if (window.confirm("Remove this demo store?")) act(() => actions.deleteShop(s.id), "Store removed"); }}
+                        onClick={() => { if (window.confirm(session.live ? "Remove this store from InRaf?" : "Remove this demo store?")) act(() => actions.deleteShop(s.id), "Store removed"); }}
                         className="rounded-full p-2 text-muted-foreground transition hover:bg-muted disabled:opacity-30" data-testid={`button-delete-${s.id}`}><Trash2 className="h-4 w-4" /></button>
                     </div>
                   )}

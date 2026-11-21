@@ -5,7 +5,7 @@ import { ArrowLeft, Check, CreditCard, Minus, Plus, Smartphone, X } from "lucide
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
 import { Card, Empty, ErrorNote, Notice, ProductImage } from "@/components/kit";
 import { OfferNote } from "@/components/offer-bits";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { listingBlockReason, reservedQty, shelfBlockReason, shelfLabel } from "@/lib/selectors";
@@ -15,6 +15,7 @@ import { round2, fmtDate } from "@/lib/util";
 type Step = "browse" | "qty" | "review" | "authorized" | "failed" | "done";
 
 export function SameBrowserBanner() {
+  if (LIVE) return null;
   return (
     <Notice tone="warn" testId="text-same-browser-warning">
       <span className="inline-flex items-start gap-2"><Smartphone className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Same-browser demo:</b> this catalog reads stock saved in <i>this</i> browser. Scanning on another phone opens the right page but shows that device's own copy — nothing is shared through a server.</span></span>
@@ -37,9 +38,9 @@ export default function Catalog() {
   if (!token || !shop) return (
     <Shell title="Shelf not found" back="/scan">
       <div className="mx-auto max-w-md space-y-4 pt-10 text-center">
-        <p className="text-muted-foreground">This QR doesn't match a shelf saved in this browser.</p>
+        <p className="text-muted-foreground">{LIVE ? "This QR doesn't match a shelf on InRaf. It may have ended or been removed." : "This QR doesn't match a shelf saved in this browser."}</p>
         <SameBrowserBanner />
-        <Link href="/scan" className="text-primary underline" data-testid="link-scan">See demo shelves</Link>
+        <Link href="/scan" className="text-primary underline" data-testid="link-scan">{LIVE ? "See shelves" : "See demo shelves"}</Link>
       </div>
     </Shell>
   );
@@ -54,13 +55,13 @@ export default function Catalog() {
   const tax = l ? round2((subtotal * l.taxRate) / 100) : 0;
   const total = round2(subtotal + tax + CUSTOMER_SERVICE_FEE);
 
-  const authorize = () => {
+  const authorize = async () => {
     if (!l) return;
-    const r = act(() => actions.authorize(l.id, qty, decline));
+    const r = await act(() => actions.authorize(l.id, qty, decline));
     if (r.ok && r.id) { setOrderId(r.id); setStep(decline ? "failed" : "authorized"); }
   };
-  const captureIt = () => { if (!orderId) return; const r = act(() => actions.capture(orderId), "Payment captured (simulated)"); if (r.ok) setStep("done"); else setStep("browse"); };
-  const cancel = () => { if (!orderId) return; const r = act(() => actions.cancelAuthorization(orderId), "Cancelled — nothing charged"); if (r.ok) { setStep("browse"); setOrderId(null); } };
+  const captureIt = async () => { if (!orderId) return; const r = await act(() => actions.capture(orderId), "Payment captured (simulated)"); if (r.ok) setStep("done"); else setStep("browse"); };
+  const cancel = async () => { if (!orderId) return; const r = await act(() => actions.cancelAuthorization(orderId), "Cancelled — nothing charged"); if (r.ok) { setStep("browse"); setOrderId(null); } };
   const restart = () => { setStep("browse"); setPick(null); setQty(1); setDecline(false); setOrderId(null); clearError(); };
 
   return (
@@ -126,8 +127,8 @@ export default function Catalog() {
                   <div className="flex justify-between text-muted-foreground"><dt>Platform service fee (disclosed)</dt><dd className="tabular-nums">{usd(CUSTOMER_SERVICE_FEE)}</dd></div>
                   <div className="flex justify-between border-t border-border pt-2 font-display text-lg font-bold"><dt>Total</dt><dd className="tabular-nums" data-testid="text-total">{usd(total)}</dd></div>
                 </dl>
-                <p className="mt-2 text-xs text-muted-foreground">Sold by the token holder of this shelf, not by {shop.name}. Demo USD.</p>
-                <label className="mt-4 flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-sm"><input type="checkbox" checked={decline} onChange={(e) => setDecline(e.target.checked)} data-testid="checkbox-decline" />Simulate a declined payment</label>
+                <p className="mt-2 text-xs text-muted-foreground">Sold by the token holder of this shelf, not by {shop.name}. {LIVE ? "USD. Payment is simulated: you won't be charged." : "Demo USD."}</p>
+                {!LIVE && <label className="mt-4 flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-sm"><input type="checkbox" checked={decline} onChange={(e) => setDecline(e.target.checked)} data-testid="checkbox-decline" />Simulate a declined payment</label>}
                 <div className="mt-5 flex flex-col gap-2">
                   <PrimaryButton disabled={pending} onClick={authorize} data-testid="button-authorize"><CreditCard className="h-4 w-4" />Simulate authorization</PrimaryButton>
                   <GhostButton onClick={() => setStep("qty")} data-testid="button-back-qty">Change quantity</GhostButton>

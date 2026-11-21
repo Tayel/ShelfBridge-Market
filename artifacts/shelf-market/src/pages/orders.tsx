@@ -3,7 +3,7 @@ import { Link, useParams } from "wouter";
 import { Printer } from "lucide-react";
 import { Shell, PageTitle, PrimaryButton } from "@/components/shell";
 import { Card, Empty, ErrorNote, Field, Pill, SmallButton, inputCls } from "@/components/kit";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { shelfLabel } from "@/lib/selectors";
@@ -14,9 +14,9 @@ export function OrdersList() {
   const orders = st.orders.slice().reverse();
   return (
     <Shell title="My orders">
-      <PageTitle title="My orders" sub="Every order placed in this browser. On a shared demo device, that's everyone's." />
+      <PageTitle title="My orders" sub={LIVE ? "Orders you placed on InRaf, on this device or signed in." : "Every order placed in this browser. On a shared demo device, that's everyone's."} />
       <div className="mx-auto mt-8 max-w-2xl space-y-3">
-        {orders.length === 0 && <Empty title="No orders yet" text="Scan a demo shelf to buy something." action={<Link href="/scan" className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground" data-testid="link-scan">Scan a shelf</Link>} />}
+        {orders.length === 0 && <Empty title="No orders yet" text={LIVE ? "Scan a shelf to buy something." : "Scan a demo shelf to buy something."} action={<Link href="/scan" className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground" data-testid="link-scan">Scan a shelf</Link>} />}
         {orders.map((o) => (
           <Link key={o.id} href={`/orders/${o.id}`} className="flex items-center gap-3 rounded-3xl border border-border p-4 transition hover:border-primary/40" data-testid={`link-order-${o.id}`}>
             <div className="min-w-0 flex-1">
@@ -50,7 +50,7 @@ export function Receipt() {
         <Card testId="card-receipt">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">Demo receipt</p>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">{LIVE ? "Receipt · payment simulated" : "Demo receipt"}</p>
               <p className="font-display text-2xl font-bold" data-testid="text-order-ref">{o.ref}</p>
             </div>
             <Pill testId="status-payment">{o.payment}</Pill>

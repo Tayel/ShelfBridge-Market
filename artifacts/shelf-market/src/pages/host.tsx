@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
+import { ProductVideo } from "@/components/product-video";
 import { Link, useLocation } from "wouter";
-import { HowItWorks, JourneySteps, ProductSwitch, asset, useRequireProduct } from "@/components/product-bits";
+import { HowItWorks, JourneySteps, ProductSwitch, useRequireProduct } from "@/components/product-bits";
 import { ArrowRight, BadgeCheck, Boxes, ChevronDown, Coins, IdCard, ShieldCheck, Sparkles } from "lucide-react";
 import { Shell, PrimaryButton } from "@/components/shell";
 import { Card } from "@/components/kit";
 import { ShopMap } from "@/components/listing-bits";
 import { PRODUCT_JOURNEY, countryName, shopServes } from "@/lib/data";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useStore, usd } from "@/lib/store";
 
 /** Share of shelves assumed rented in the estimate. Illustrative only. */
 const OCCUPANCY = 0.7;
@@ -16,7 +17,7 @@ const PROMISE_ICONS = [Sparkles, Coins, ShieldCheck];
 const PROTECTION = [
   { icon: IdCard, title: "Checks on both sides", text: "Shops and makers both go through a business check (KYB) before a contract can start." },
   { icon: Boxes, title: "Stock counted in and out", text: "Delivery works like check-in: a counted, photographed stock list. Collection at the end works the same way." },
-  { icon: BadgeCheck, title: "Inventory protection", text: "Planned cover for theft or damage of a maker's stock while it's on your shelf. Not offered in this demo." },
+  { icon: BadgeCheck, title: "Inventory protection", text: LIVE ? "Planned cover for theft or damage of a maker's stock while it's on your shelf. Not offered yet." : "Planned cover for theft or damage of a maker's stock while it's on your shelf. Not offered in this demo." },
 ];
 
 
@@ -64,11 +65,11 @@ function HostFor({ product }: { product: "expiring" | "flying" }) {
               </select>
             </label>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">Estimate based on the rent of similar {product === "flying" ? "airport" : "neighbourhood"} demo shops. Illustrative, not a promise of earnings.</p>
+          <p className="mt-4 text-xs text-muted-foreground">Estimate based on the rent of similar {product === "flying" ? "airport" : "neighbourhood"}{LIVE ? "" : " demo"} shops. Illustrative, not a promise of earnings.</p>
           <PrimaryButton className="mt-6" onClick={() => go(`/owner?product=${product}`)} data-testid="button-start-listing">{j.owner.cta} <ArrowRight className="h-4 w-4" /></PrimaryButton>
         </div>
         <figure className="overflow-hidden rounded-[2rem] border border-border">
-          <img src={asset(j.illustration)} alt={product === "flying" ? "A Made in Our Country shop at an airport gate" : "A neighbourhood grocery with an About to Expire shelf"} className="w-full" />
+          <ProductVideo product={product} className="aspect-[590/242]" alt={product === "flying" ? "A Made in Our Country shop at an airport gate" : "A neighbourhood grocery with an About to Expire shelf"} />
         </figure>
       </section>
 

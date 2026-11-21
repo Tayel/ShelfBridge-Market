@@ -2,6 +2,8 @@ import { jsPDF } from "jspdf";
 import type { AuditEntry, Contract, ContractVersion } from "./types";
 import { categoryLabel, countryName } from "./data";
 
+const LIVE = import.meta.env.VITE_BACKEND === "api";
+
 /** Generates a real PDF file marked as a non-legal demo document. */
 export function downloadContractPdf(c: Contract, v: ContractVersion, audit: AuditEntry[]) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -10,8 +12,8 @@ export function downloadContractPdf(c: Contract, v: ContractVersion, audit: Audi
   let y = 0;
   const stamp = () => {
     doc.setTextColor(214, 90, 60); doc.setFontSize(54); doc.setFont("helvetica", "bold");
-    doc.text("DEMO — NOT A LEGAL CONTRACT", W / 2, H / 2, { align: "center", angle: 35 });
-    doc.setFontSize(9); doc.text("DEMO — NOT A LEGAL CONTRACT · no legal effect · simulated signatures", W / 2, H - 24, { align: "center" });
+    doc.text(LIVE ? "TEMPLATE — NOT A LEGAL CONTRACT" : "DEMO — NOT A LEGAL CONTRACT", W / 2, H / 2, { align: "center", angle: 35 });
+    doc.setFontSize(9); doc.text(LIVE ? "TEMPLATE — NOT A LEGAL CONTRACT · no legal effect · typed signatures" : "DEMO — NOT A LEGAL CONTRACT · no legal effect · simulated signatures", W / 2, H - 24, { align: "center" });
     doc.setTextColor(40, 30, 25);
   };
   const newPage = () => { doc.addPage(); stamp(); y = 56; };
@@ -23,18 +25,18 @@ export function downloadContractPdf(c: Contract, v: ContractVersion, audit: Audi
   const head = (t: string) => { y += 8; line(t, 12, true, 6); };
 
   stamp(); y = 56;
-  line("InRaf — Shelf-use agreement (demo)", 18, true, 8);
+  line(LIVE ? "InRaf — Shelf-use agreement" : "InRaf — Shelf-use agreement (demo)", 18, true, 8);
   line(`${c.ref} · version ${v.v} (${v.kind}) · status: ${v.status}`, 10);
-  line(`Generated ${new Date().toLocaleString()} — demo record only. Tokens are contractual shelf-use demo records, not crypto assets.`, 9);
+  line(`Generated ${new Date().toLocaleString()} — ${LIVE ? "template record. Tokens record the right to use a shelf" : "demo record only. Tokens are contractual shelf-use demo records"}, not crypto assets.`, 9);
   const s = v.snapshot;
   head("A. Store and shelf");
   line(`Store: ${s.store.name}, ${s.store.address} (${countryName(s.store.country)})`);
-  line(`Registration (demo value): ${s.store.registration} · Owner: ${s.store.ownerName}`);
+  line(`Registration${LIVE ? "" : " (demo value)"}: ${s.store.registration} · Owner: ${s.store.ownerName}`);
   line(`Shelf: ${s.shelf.label} · count ${s.shelf.count} · ${s.shelf.spec.widthCm} × ${s.shelf.spec.heightCm} × ${s.shelf.spec.depthCm} cm (W×H×D) · area ${s.shelf.areaCm2} cm² · capacity ${s.shelf.spec.capacity} units`);
   line(`Location: ${s.shelf.floorNote}`);
   line(`Permitted categories: ${s.shelf.categories.map(categoryLabel).join(", ") || "—"} · Restrictions: ${s.shelf.restrictions.join(", ") || "none"}`);
   head("B. Holder");
-  line(`${s.holder.name} (${s.holder.kind}) · registration (demo value): ${s.holder.registration}`);
+  line(`${s.holder.name} (${s.holder.kind}) · registration${LIVE ? "" : " (demo value)"}: ${s.holder.registration}`);
   head("C. Terms");
   const t = s.terms;
   line(`Term: ${t.start} to ${t.end} (${t.months} months) · renewal: ${t.renewal}`);
@@ -53,6 +55,6 @@ export function downloadContractPdf(c: Contract, v: ContractVersion, audit: Audi
   head("E. Audit trail");
   audit.slice(-25).forEach((a) => line(`${new Date(a.at).toLocaleString()} · ${a.actor} · ${a.action} · ${a.detail}`, 8, false, 3));
   y += 10;
-  line("This document was produced by a browser demo. Typed names are not electronic signatures, nothing here is legally binding, and no tax or legal assurance is given for any jurisdiction.", 8);
-  doc.save(`${c.ref}-v${v.v}-DEMO.pdf`);
+  line((LIVE ? "This document was produced on InRaf from a template. " : "This document was produced by a browser demo. ") + "Typed names are not electronic signatures, nothing here is legally binding, and no tax or legal assurance is given for any jurisdiction.", 8);
+  doc.save(`${c.ref}-v${v.v}${LIVE ? "" : "-DEMO"}.pdf`);
 }

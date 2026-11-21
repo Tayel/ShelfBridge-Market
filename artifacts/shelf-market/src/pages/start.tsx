@@ -2,6 +2,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, Plane, Clock } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
+import { ProductVideo, useMouseHover } from "@/components/product-video";
 import { HowItWorks, JourneySteps, asset, nextStep, type JourneyRole } from "@/components/product-bits";
 import { PRODUCT_JOURNEY, isProductId, type ProductId } from "@/lib/data";
 
@@ -43,26 +44,11 @@ export default function Start() {
             <h1 className="font-display text-center text-4xl font-extrabold md:text-5xl">{ROLE[role].ask}</h1>
             <p className="mt-3 text-center text-muted-foreground">InRaf runs two products. Pick one to see how it works before you apply.</p>
             <div className="mx-auto mt-10 grid max-w-5xl gap-6 md:grid-cols-2">
-              {(Object.keys(PRODUCT_JOURNEY) as ProductId[]).map((p, i) => {
-                const j = PRODUCT_JOURNEY[p];
-                const Icon = p === "expiring" ? Clock : Plane;
-                return (
-                  <motion.div key={p} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.12, duration: 0.45 }}>
-                    <Link href={url(p)} data-testid={`choose-product-${p}`}
-                      className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-border transition hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(120,60,30,.35)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30">
-                      <img src={asset(j.illustration)} alt="" className="h-52 w-full object-cover object-center transition duration-500 group-hover:scale-[1.03]" />
-                      <div className="flex flex-1 flex-col items-center p-7 text-center">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"><Icon className="h-3.5 w-3.5" />{p === "expiring" ? (role === "owner" ? "Neighbourhood shops" : "Factories & producers") : (role === "owner" ? "Airport shops" : "Local manufacturers")}</span>
-                        <h2 className="font-display mt-3 text-3xl font-bold">{j.title}</h2>
-                        <p className="mt-2 text-muted-foreground">{j.summary}</p>
-                        <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground transition group-hover:gap-3">
-                          See how it works <ArrowRight className="h-4 w-4" />
-                        </span>
-                      </div>
-                    </Link>
-                  </motion.div>
-                );
-              })}
+              {(Object.keys(PRODUCT_JOURNEY) as ProductId[]).map((p, i) => (
+                <motion.div key={p} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.12, duration: 0.45 }}>
+                  <ProductCard product={p} role={role} href={url(p)} />
+                </motion.div>
+              ))}
             </div>
           </motion.section>
         ) : (
@@ -70,6 +56,29 @@ export default function Start() {
         )}
       </AnimatePresence>
     </Shell>
+  );
+}
+
+/** One product: hover (or tap) the picture to play its video, click it to watch larger; the text goes on to "how it works". */
+function ProductCard({ product, role, href }: { product: ProductId; role: JourneyRole; href: string }) {
+  const j = PRODUCT_JOURNEY[product];
+  const Icon = product === "expiring" ? Clock : Plane;
+  const { hovered, bind } = useMouseHover();
+  const tag = product === "expiring" ? (role === "owner" ? "Neighbourhood shops" : "Factories & producers") : (role === "owner" ? "Airport shops" : "Local manufacturers");
+  return (
+    <div {...bind} className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-border transition hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(120,60,30,.35)]" data-testid={`card-product-${product}`}>
+      <ProductVideo product={product} active={hovered} className="h-52" imgClassName="transition duration-500 group-hover:scale-[1.03]"
+        playerExtra={<Link href={href} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">See how it works <ArrowRight className="h-4 w-4" /></Link>} />
+      <Link href={href} data-testid={`choose-product-${product}`}
+        className="flex flex-1 flex-col items-center p-7 text-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ring/30">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"><Icon className="h-3.5 w-3.5" />{tag}</span>
+        <h2 className="font-display mt-3 text-3xl font-bold">{j.title}</h2>
+        <p className="mt-2 text-muted-foreground">{j.summary}</p>
+        <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground transition group-hover:gap-3">
+          See how it works <ArrowRight className="h-4 w-4" />
+        </span>
+      </Link>
+    </div>
   );
 }
 

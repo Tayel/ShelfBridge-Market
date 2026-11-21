@@ -1,12 +1,12 @@
 import { type ReactNode, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowLeft, Bell, ChevronDown, Menu } from "lucide-react";
+import { ArrowLeft, Bell, ChevronDown, Menu, UserRound } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup,
   DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore } from "@/lib/store";
+import { LIVE, auth, useSession, useStore } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { ROLE_LABEL } from "@/lib/ops";
 import type { Role } from "@/lib/types";
@@ -14,13 +14,13 @@ import type { Role } from "@/lib/types";
 const HOME: Record<Role, string> = { owner: "/owner-dashboard", holder: "/dashboard", customer: "/scan", admin: "/admin" };
 
 /** The compliance console that screens this marketplace's makers and monitors its sales. */
-export const FINCRIME_OS_URL = import.meta.env.VITE_FINCRIME_OS_URL ?? "http://localhost:5176/shelf-market";
+export const FINCRIME_OS_URL: string | null = import.meta.env.VITE_FINCRIME_OS_URL ?? (import.meta.env.DEV ? "http://localhost:5176/shelf-market" : null);
 
 const MENU: { group: string; items: { href: string; label: string }[] }[] = [
   { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/start?as=owner", label: "List a new shop" }] },
   { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/start?as=holder", label: "Find a shelf" }, { href: "/saved", label: "Saved shelves" }] },
-  { group: "Customer", items: [{ href: "/offers/expiring", label: "About to expire" }, { href: "/offers/flying", label: "About to fly" }, { href: "/scan", label: "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
-  { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: "Demo guide & limits" }, { href: FINCRIME_OS_URL, label: "In-Raf FinCrime OS ↗" }] },
+  { group: "Customer", items: [{ href: "/offers/expiring", label: "About to expire" }, { href: "/offers/flying", label: "About to fly" }, { href: "/scan", label: LIVE ? "Scan a shelf" : "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
+  { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: LIVE ? "How InRaf works" : "Demo guide & limits" }, ...(FINCRIME_OS_URL ? [{ href: FINCRIME_OS_URL, label: "In-Raf FinCrime OS ↗" }] : [])] },
 ];
 
 export function Logo() {
@@ -33,6 +33,13 @@ export function Logo() {
 }
 
 export function DemoBadge() {
+  const { live } = useSession();
+  if (live) return (
+    <Link href="/guide" data-testid="badge-demo" title="Accounts and data are real. Payments, signatures and settlements are still simulated."
+      className="hidden rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground ring-1 ring-amber-300/60 sm:inline-flex">
+      Live · payments simulated
+    </Link>
+  );
   return (
     <Link href="/guide" data-testid="badge-demo" title="Demo only. Nothing is real, no money moves."
       className="hidden rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground ring-1 ring-amber-300/60 sm:inline-flex">
@@ -41,8 +48,32 @@ export function DemoBadge() {
   );
 }
 
+/** Live mode: sign in, or the signed-in account with sign out. */
+function Account() {
+  const s = useSession();
+  const [loc, go] = useLocation();
+  if (!s.live) return null;
+  if (!s.me) return (
+    <button onClick={() => go(`/signin?next=${encodeURIComponent(loc)}`)} data-testid="button-signin"
+      className="rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground">Sign in</button>
+  );
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Account" data-testid="button-account">
+        <UserRound className="h-5 w-5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60 rounded-2xl">
+        <DropdownMenuLabel className="font-normal"><span className="block font-semibold">{s.me.name || "Your account"}</span><span className="block truncate text-xs text-muted-foreground">{s.me.email}</span></DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void auth.logout().then(() => go("/"))} data-testid="menu-signout">Sign out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function RoleSwitch() {
   const st = useStore();
+  const session = useSession();
   const [, go] = useLocation();
   const unread = st.notifications.filter((n) => n.role === st.role && !n.read).length;
   return (
@@ -52,9 +83,9 @@ function RoleSwitch() {
           <span className="hidden text-muted-foreground sm:inline">View as</span> {ROLE_LABEL[st.role]} <ChevronDown className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 rounded-2xl">
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Demo view selector — simulation, not a login or permission check.</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{session.live ? "Choose which side of InRaf to look at. What you can change depends on your account." : "Demo view selector — simulation, not a login or permission check."}</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={st.role} onValueChange={(v) => { const r = v as Role; actions.setRole(r); go(HOME[r]); }}>
-            {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
+            {(Object.keys(ROLE_LABEL) as Role[]).filter((r) => r !== "admin" || !session.live || session.me?.isAdmin).map((r) => (
               <DropdownMenuRadioItem key={r} value={r} data-testid={`option-role-${r}`}>{ROLE_LABEL[r]}</DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -65,6 +96,7 @@ function RoleSwitch() {
         <Bell className="h-5 w-5" />
         {unread > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground" data-testid="badge-unread">{unread}</span>}
       </Link>
+      <Account />
       <DropdownMenu>
         <DropdownMenuTrigger className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Menu" data-testid="button-menu">
           <Menu className="h-5 w-5" />
@@ -74,7 +106,7 @@ function RoleSwitch() {
             <div key={g.group}>
               {gi > 0 && <DropdownMenuSeparator />}
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">{g.group}</DropdownMenuLabel>
-              {g.items.map((i) => (
+              {g.items.filter((i) => i.href !== "/admin" || !session.live || session.me?.isAdmin).map((i) => (
                 <DropdownMenuItem key={i.href} onSelect={() => (i.href.startsWith("http") ? window.open(i.href, "_blank", "noopener") : go(i.href))} data-testid={`menu-${i.href.startsWith("http") ? "fincrime-os" : i.href.slice(1)}`}>{i.label}</DropdownMenuItem>
               ))}
             </div>
@@ -87,9 +119,10 @@ function RoleSwitch() {
 
 export function Shell({ children, title, back, wide }: { children: ReactNode; title: string; back?: string; wide?: boolean }) {
   const [loc] = useLocation();
-  useEffect(() => { document.title = `${title} · InRaf shelf-rental demo`; }, [title]);
+  const { live } = useSession();
+  useEffect(() => { document.title = LIVE ? `${title} · InRaf` : `${title} · InRaf shelf-rental demo`; }, [title]);
   return (
-    <div className="min-h-[100dvh] bg-background">
+    <div className="min-h-[100dvh] overflow-x-clip bg-background">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <Logo />
@@ -107,8 +140,8 @@ export function Shell({ children, title, back, wide }: { children: ReactNode; ti
         {children}
       </motion.main>
       <footer className="border-t border-border/60 px-4 py-6 text-center text-xs text-muted-foreground">
-        Browser-only demo. Amounts in demo USD; tax and fees are illustrative, not advice for any jurisdiction. No real payments, signatures, identity checks, email or SMS.{" "}
-        <Link href="/guide" className="underline" data-testid="link-footer-guide">Read the demo guide</Link>
+        {live ? "Accounts and listings are real and shared. Payments, e-signatures and settlements are simulated: no money moves. Amounts in USD;" : "Browser-only demo. Amounts in demo USD;"} {" "}tax and fees are illustrative, not advice for any jurisdiction.{live ? " " : " No real payments, signatures, identity checks, email or SMS. "}
+        <Link href="/guide" className="underline" data-testid="link-footer-guide">{live ? "How InRaf works" : "Read the demo guide"}</Link>
       </footer>
     </div>
   );

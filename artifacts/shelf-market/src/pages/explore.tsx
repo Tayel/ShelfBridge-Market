@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import { ProductVideo } from "@/components/product-video";
 import { Link, useLocation } from "wouter";
 import { Check } from "lucide-react";
-import { HowItWorks, JourneySteps, ProductSwitch, asset, useRequireProduct } from "@/components/product-bits";
+import { HowItWorks, JourneySteps, ProductSwitch, useRequireProduct } from "@/components/product-bits";
 import { motion } from "framer-motion";
 import { Map as MapIcon, List, MapPin, SlidersHorizontal, Store, Users } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
@@ -12,7 +13,7 @@ import { ListingBadges, Rating, SaveHeart, ShopMap, priceText } from "@/componen
 import { rentOf } from "@/lib/ops";
 import { BUSINESSES, CATEGORIES, FEATURES, PRICING_LABEL, PRODUCT_JOURNEY, SHELF_TYPES, countryName, shelfTypeLabel, shopServes, type ProductId } from "@/lib/data";
 import { isFavourite } from "@/lib/reviews";
-import { slotsOf, takenSlots, useStore, usd } from "@/lib/store";
+import { isMine, slotsOf, takenSlots, useSession, useStore, usd } from "@/lib/store";
 import { today } from "@/lib/util";
 import type { PricingModel, Shop, ShelfType } from "@/lib/types";
 
@@ -101,7 +102,7 @@ function ExploreFor({ product }: { product: ProductId }) {
           </ul>
         </div>
         <figure className="overflow-hidden rounded-[2rem] border border-border">
-          <img src={asset(j.illustration)} alt={product === "flying" ? "A Made in Our Country shop at an airport gate" : "A neighbourhood grocery with an About to Expire shelf"} className="w-full" />
+          <ProductVideo product={product} className="aspect-[590/242]" alt={product === "flying" ? "A Made in Our Country shop at an airport gate" : "A neighbourhood grocery with an About to Expire shelf"} />
         </figure>
       </section>
       <h2 className="font-display mt-12 text-center text-3xl font-bold">{j.holder.cta}</h2>
@@ -215,6 +216,7 @@ function FilterGroup({ title, options, value, onChange }: { title: string; optio
 }
 
 export function ShopCard({ shop: s, i, months, qs = "", active, saved, free }: { shop: Shop; i: number; months: number; qs?: string; active?: boolean; saved: boolean; free: number }) {
+  const session = useSession();
   const L = s.listing;
   const term = months || s.terms.months;
   const cover = coverOf(s.photos);
@@ -247,7 +249,7 @@ export function ShopCard({ shop: s, i, months, qs = "", active, saved, free }: {
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
           <span className={`rounded-full px-2.5 py-1 ${free ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>{free ? `${free} free` : "Full"}</span>
           {L.cancellation === "flexible" && <span className="rounded-full bg-muted px-2.5 py-1">Flexible cancellation</span>}
-          {!s.seeded && <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-accent-foreground"><Store className="h-3 w-3" />Yours</span>}
+          {isMine(s, session) && <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-accent-foreground"><Store className="h-3 w-3" />Yours</span>}
         </div>
       </Link>
     </motion.div>

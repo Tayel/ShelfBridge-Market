@@ -5,10 +5,10 @@ import { AlertTriangle, ArrowRight } from "lucide-react";
 import { Shell, PageTitle, PrimaryButton } from "@/components/shell";
 import { ShelfArt } from "@/components/shelf-art";
 import { Card, Empty, ErrorNote, Pill, SmallButton, Stat, Tabs } from "@/components/kit";
-import { useStore, usd } from "@/lib/store";
+import { useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
-import { YOU_HOLDER, holderOf } from "@/lib/ops";
+import { holderOf } from "@/lib/ops";
 import { contractOfToken, contractStatus, expiresSoon, holderMoney, invoiceStatus, isExpired, isLowStock, lateFeeFor, shelfBlockReason, shelfLabel } from "@/lib/selectors";
 import { daysUntil, fmtDate, fmtTime, round2 } from "@/lib/util";
 
@@ -16,11 +16,12 @@ const STAGE: Record<string, string> = { A: "Token A · empty", requested: "Produ
 
 export default function Dashboard() {
   const st = useStore();
+  const { holderId: YOU_HOLDER, me: account } = useSession();
   const [, go] = useLocation();
   const search = useSearch();
   const [tab, setTab] = useState(new URLSearchParams(search).get("tab") ?? "shelves");
   const { act, error, pending } = useAct();
-  const me = holderOf(st, YOU_HOLDER);
+  const me = st.holders.some((h) => h.id === YOU_HOLDER) || !account ? holderOf(st, YOU_HOLDER) : { ...holderOf(st, YOU_HOLDER), name: account.name || account.email };
   const tokens = st.tokens.filter((t) => t.holderId === YOU_HOLDER);
   const myContracts = st.contracts.filter((c) => c.holderId === YOU_HOLDER);
   const orders = st.orders.filter((o) => o.holderId === YOU_HOLDER).slice().reverse();

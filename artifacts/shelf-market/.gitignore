@@ -1,0 +1,4 @@
+
+# server bundle and local env
+server-dist/
+.env*.local

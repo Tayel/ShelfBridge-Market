@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Shell, PageTitle } from "@/components/shell";
 import { Empty, Notice, SmallButton, Tabs } from "@/components/kit";
-import { useStore } from "@/lib/store";
+import { LIVE, useStore } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { ROLE_LABEL } from "@/lib/ops";
 import { fmtTime } from "@/lib/util";
@@ -15,11 +15,11 @@ export default function Notifications() {
   const unread = (r: Role) => st.notifications.filter((n) => n.role === r && !n.read).length;
   return (
     <Shell title="Notifications" back="/">
-      <PageTitle title="Notifications" sub="Created by actions in this demo.">
+      <PageTitle title="Notifications" sub={LIVE ? "Updates about your stores, shelves, contracts and orders." : "Created by actions in this demo."}>
         <Tabs value={role} onChange={setRole} options={(Object.keys(ROLE_LABEL) as Role[]).map((r) => ({ id: r, label: ROLE_LABEL[r], count: unread(r) }))} />
       </PageTitle>
       <div className="mx-auto mt-6 max-w-2xl space-y-3">
-        <Notice tone="mute">In-app only. Email, SMS and messaging apps are not connected in this demo.</Notice>
+        <Notice tone="mute">{LIVE ? "In-app only for now. Email, SMS and messaging apps aren't connected yet." : "In-app only. Email, SMS and messaging apps are not connected in this demo."}</Notice>
         {list.length > 0 && <div className="flex justify-end"><SmallButton onClick={() => actions.markRead(role as Role)} testId="button-mark-all">Mark all read</SmallButton></div>}
         {list.length === 0 && <Empty title="All quiet" text="Nothing for this role yet." />}
         {list.map((n) => (

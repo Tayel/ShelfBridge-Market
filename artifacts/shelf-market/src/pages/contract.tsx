@@ -3,7 +3,7 @@ import { Link, useParams } from "wouter";
 import { Check, Download, FileText, RefreshCw, ShieldCheck, Signature as SigIcon, XCircle } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
 import { Card, ErrorNote, Field, Modal, Notice, Pill, SmallButton, inputCls } from "@/components/kit";
-import { useStore, usd } from "@/lib/store";
+import { LIVE, useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { awaitingVersion, contractStatus, executedVersion, invoiceStatus, lateFeeFor } from "@/lib/selectors";
@@ -29,7 +29,7 @@ function Snapshot({ v }: { v: ContractVersion }) {
   const s = v.snapshot; const t = s.terms;
   const rows: [string, string][] = [
     ["Store", `${s.store.name}, ${s.store.address}, ${countryName(s.store.country)}`],
-    ["Registration (demo)", s.store.registration],
+    [LIVE ? "Registration" : "Registration (demo)", s.store.registration],
     ["Owner", s.store.ownerName],
     ["Holder", `${s.holder.name} · ${s.holder.kind} · ${s.holder.registration}`],
     ["Shelf", `${s.shelf.label} · ${s.shelf.count} shelf · ${s.shelf.spec.widthCm}×${s.shelf.spec.heightCm}×${s.shelf.spec.depthCm} cm · ${s.shelf.areaCm2} cm² · ${s.shelf.spec.capacity} units`],
@@ -51,6 +51,7 @@ function Snapshot({ v }: { v: ContractVersion }) {
 export default function ContractPage() {
   const { id } = useParams<{ id: string }>();
   const st = useStore();
+  const session = useSession();
   const { act, error, pending, clearError } = useAct();
   const [name, setName] = useState("");
   const [reviewed, setReviewed] = useState(false);
@@ -73,15 +74,16 @@ export default function ContractPage() {
 
   // Next required step for the awaiting version
   const next = !aw || c.terminatedAt ? null : !aw.adminApproval ? "admin" : !aw.ownerSig ? "owner" : !aw.holderSig ? "holder" : null;
-  const ownerSim = !!shop?.seeded; const holderSim = holder.seeded;
+  // Simulated counter-signatures exist only in the browser demo; live contracts need both real parties.
+  const ownerSim = !session.live && !!shop?.seeded; const holderSim = !session.live && holder.seeded;
   const simName = (n: string) => n.replace(/\s*\(sample\)/, "");
 
-  const doNext = () => {
+  const doNext = async () => {
     if (!aw || !next) return;
     if (next !== "admin" && !reviewed) { act(() => ({ ok: false, error: "Tick “I reviewed this version” first." })); return; }
-    const r = next === "admin" ? act(() => actions.approveContract(c.id, name || "Platform reviewer"), "Platform approval recorded (simulated)")
-      : next === "owner" ? act(() => actions.sign(c.id, "owner", ownerSim ? simName(shop?.ownerName ?? "Owner") : name, ownerSim), "Owner signature recorded (demo)")
-      : act(() => actions.sign(c.id, "holder", holderSim ? simName(holder.name) : name, holderSim), "Holder signature recorded (demo)");
+    const r = await (next === "admin" ? act(() => actions.approveContract(c.id, name || "Platform reviewer"), "Platform approval recorded (simulated)")
+      : next === "owner" ? act(() => actions.sign(c.id, "owner", ownerSim ? simName(shop?.ownerName ?? "Owner") : name, ownerSim), LIVE ? "Owner signature recorded" : "Owner signature recorded (demo)")
+      : act(() => actions.sign(c.id, "holder", holderSim ? simName(holder.name) : name, holderSim), LIVE ? "Holder signature recorded" : "Holder signature recorded (demo)"));
     if (r.ok) { setName(""); setReviewed(false); }
   };
   const nextLabel = next === "admin" ? "Approve as platform (simulated admin)"
@@ -99,7 +101,7 @@ export default function ContractPage() {
         <div className="flex flex-wrap justify-center gap-2"><Pill testId="status-contract">{status}</Pill><Pill tone="mute">v{shown.v} · {shown.kind}</Pill></div>
       </div>
 
-      <Notice tone="info" testId="text-legal-disclaimer">Demo record — <b>not a legal contract</b>. Typed names are recorded with timestamps but are not legally valid electronic signatures.</Notice>
+      <Notice tone="info" testId="text-legal-disclaimer">{LIVE ? "Template contract recorded on InRaf — " : "Demo record — "}<b>not a legal contract</b>. Typed names are recorded with timestamps but are not legally valid electronic signatures.</Notice>
 
       <div className="mx-auto mt-6 grid max-w-5xl gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
@@ -108,7 +110,7 @@ export default function ContractPage() {
               <p className="text-xs uppercase tracking-wide text-primary">Next step · v{aw.v}</p>
               <h2 className="font-display mt-1 text-2xl font-bold">{nextLabel}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {next === "admin" ? "Platform review is a simulated admin action in this demo." : `Both parties must review and accept this exact version. ${next === "owner" && ownerSim ? "This store is a sample — its owner's signature is simulated." : next === "holder" && holderSim ? "This holder is a sample profile — their signature is simulated." : "Type your full name as a demo signature."}`}
+                {next === "admin" ? (LIVE ? "Waiting for the InRaf team to review this contract." : "Platform review is a simulated admin action in this demo.") : `Both parties must review and accept this exact version. ${next === "owner" && ownerSim ? "This store is a sample — its owner's signature is simulated." : next === "holder" && holderSim ? "This holder is a sample profile — their signature is simulated." : "Type your full name as a demo signature."}`}
               </p>
               <div className="mt-4 space-y-3">
                 {next !== "admin" && (
@@ -127,7 +129,7 @@ export default function ContractPage() {
           <Card>
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-display text-xl font-bold">Agreement · v{shown.v}</h2>
-              <SmallButton onClick={() => downloadContractPdf(c, shown, trail.slice().reverse())} testId="button-download-pdf"><Download className="h-4 w-4" />PDF (demo)</SmallButton>
+              <SmallButton onClick={() => downloadContractPdf(c, shown, trail.slice().reverse())} testId="button-download-pdf"><Download className="h-4 w-4" />{LIVE ? "PDF" : "PDF (demo)"}</SmallButton>
             </div>
             {shown.note && <p className="mt-2 text-sm text-muted-foreground">{shown.note}</p>}
             <div className="mt-4"><Snapshot v={shown} /></div>
@@ -137,7 +139,7 @@ export default function ContractPage() {
           {invoices.length > 0 && (
             <Card testId="card-rent-schedule">
               <h2 className="font-display text-xl font-bold">Rent obligations</h2>
-              <p className="text-xs text-muted-foreground">Separate from product sales. Payments are simulated; receipts are demo records.</p>
+              <p className="text-xs text-muted-foreground">Separate from product sales. Payments are simulated; receipts are records only and no money moved.</p>
               <ul className="mt-3 divide-y divide-border">
                 {invoices.map((i) => {
                   const s = invoiceStatus(i); const fee = lateFeeFor(st, i);
@@ -203,14 +205,14 @@ export default function ContractPage() {
         </div>
         <div className="mt-3"><Field label="Note"><input value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} placeholder="What changes?" data-testid="input-version-note" /></Field></div>
         <div className="mt-3"><ErrorNote error={error} /></div>
-        <PrimaryButton className="mt-5 w-full" disabled={pending} onClick={() => { const r = act(() => actions.newVersion(c.id, modal === "renewal" ? "renewal" : "amendment", { months, monthlyRent: rent, note }, st.role), "New version drafted"); if (r.ok) setModal(null); }} data-testid="button-create-version">Create unsigned version</PrimaryButton>
+        <PrimaryButton className="mt-5 w-full" disabled={pending} onClick={async () => { const r = await act(() => actions.newVersion(c.id, modal === "renewal" ? "renewal" : "amendment", { months, monthlyRent: rent, note }, st.role), "New version drafted"); if (r.ok) setModal(null); }} data-testid="button-create-version">Create unsigned version</PrimaryButton>
       </Modal>
 
       <Modal open={modal === "terminate" || modal === "reject"} onClose={() => setModal(null)} title={modal === "reject" ? "Reject this version" : ex ? "Terminate contract" : "Cancel request"}>
         <p className="text-sm text-muted-foreground">{modal === "reject" ? "The version is voided. If nothing was ever executed, the shelf is released." : "The shelf is released, all sales on it stop immediately, open checkouts are released and unpaid future rent is voided."}</p>
         <div className="mt-4"><Field label="Reason"><input value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} data-testid="input-reason" /></Field></div>
         <div className="mt-3"><ErrorNote error={error} /></div>
-        <PrimaryButton className="mt-5 w-full" disabled={pending} onClick={() => { const r = modal === "reject" ? act(() => actions.rejectVersion(c.id, note), "Version rejected") : act(() => actions.terminate(c.id, note, st.role), "Contract terminated"); if (r.ok) setModal(null); }} data-testid="button-confirm-terminate">Confirm</PrimaryButton>
+        <PrimaryButton className="mt-5 w-full" disabled={pending} onClick={async () => { const r = await (modal === "reject" ? act(() => actions.rejectVersion(c.id, note), "Version rejected") : act(() => actions.terminate(c.id, note, st.role), "Contract terminated")); if (r.ok) setModal(null); }} data-testid="button-confirm-terminate">Confirm</PrimaryButton>
       </Modal>
     </Shell>
   );
