@@ -10,8 +10,12 @@
  *   POST /api/me/name                 { name }
  *   GET  /api/state                   the marketplace as this person may see it
  *   POST /api/actions/:name           { args: [...] } → applies one action, returns the new view
+ *   GET  /api/compliance/feed         the full compliance feed for the In-Raf FinCrime OS (server to server,
+ *                                     Authorization: Bearer $COMPLIANCE_FEED_TOKEN)
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { buildComplianceFeed } from "../src/lib/feed";
 import { DemoError } from "../src/lib/ops";
 import { HttpError, changeState, databaseUrl, logAction, q, readState } from "./db";
 import { type Me, appOrigin, currentUser, logout, requestLink, updateName, verifyLink, visitorId } from "./auth";
@@ -48,6 +52,15 @@ async function savedOf(me: Me | null) {
   return r.rows.map((x) => x.shop_id);
 }
 
+/** The FinCrime OS reads the whole marketplace with a shared key, never with a browser session. */
+function checkFeedKey(req: Req) {
+  const want = process.env.COMPLIANCE_FEED_TOKEN ?? "";
+  if (want.length < 24) throw new HttpError(503, "The compliance feed isn't set up on this server (COMPLIANCE_FEED_TOKEN).");
+  const got = String(req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
+  const h = (x: string) => createHash("sha256").update(x).digest();
+  if (!got || !timingSafeEqual(h(got), h(want))) throw new HttpError(401, "Wrong or missing compliance feed key.");
+}
+
 const meJson = (me: Me | null) => (me ? { id: me.id, email: me.email, name: me.name, isAdmin: me.isAdmin, holderId: me.holderId } : null);
 
 export default async function handler(req: Req, res: ServerResponse) {
@@ -59,6 +72,10 @@ export default async function handler(req: Req, res: ServerResponse) {
       if (!databaseUrl()) return send(res, 200, { ok: true, database: false });
       await q("select 1");
       return send(res, 200, { ok: true, database: true });
+    }
+    if (path === "/api/compliance/feed" && method === "GET") {
+      checkFeedKey(req);
+      return send(res, 200, buildComplianceFeed(await readState(), { live: true }));
     }
     if (path === "/api/auth/verify" && method === "GET") {
       const r = await verifyLink(req, res, url.searchParams.get("token") ?? "");

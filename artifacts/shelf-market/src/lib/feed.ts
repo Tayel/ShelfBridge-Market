@@ -9,14 +9,15 @@ import { nowIso } from "./util";
 
 export const FEED_SCHEMA = "inraf.shelf-market.compliance-feed/v1";
 
-export function buildComplianceFeed(s: State) {
+/** `live`: the hosted server builds it, so it is labelled live and includes stores still waiting for approval (they need screening most). */
+export function buildComplianceFeed(s: State, opts: { live?: boolean } = {}) {
   const contractOf = (id: string) => s.contracts.find((c) => c.id === id);
   return {
     schema: FEED_SCHEMA,
-    source: "InRaf Shelf Market (demo — simulated money)",
+    source: opts.live ? "InRaf Shelf Market (live — payments simulated)" : "InRaf Shelf Market (demo — simulated money)",
     generatedAt: nowIso(),
     currency: "USD",
-    shops: s.shops.filter((x) => x.status !== "pending" || x.seeded).map((x) => ({
+    shops: s.shops.filter((x) => opts.live || x.status !== "pending" || x.seeded).map((x) => ({
       id: x.id, name: x.name, country: x.country, city: x.city, address: x.address, registration: x.registration,
       ownerName: x.ownerName.replace(/\s*\(sample\)$/, ""), business: x.business, status: x.status, createdAt: x.createdAt,
     })),
