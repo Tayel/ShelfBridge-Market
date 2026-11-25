@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, Plane } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Shell } from "@/components/shell";
-import { OFFERS } from "@/lib/data";
-import { LIVE, useSession, useStore } from "@/lib/store";
+import { LIVE, useSession } from "@/lib/store";
 import { JourneyVideo } from "@/components/journey-video";
 import { useMouseHover } from "@/components/product-video";
-import { StoryHero } from "@/components/story-hero";
+import { CountryStreet } from "@/components/country-street";
+import { LittleShelf } from "@/components/little-shelf";
 
 const base = import.meta.env.BASE_URL;
 
@@ -17,15 +17,17 @@ const JOURNEYS = [
 ];
 
 export default function Landing() {
-  const st = useStore();
   const session = useSession();
-  const liveCount = (id: string) => st.listings.filter((l) => l.offer === id && l.status === "active" && l.available > 0).length;
   return (
     <Shell title="A little space. More possibility.">
-      <StoryHero nextId="home-start" />
-      <section id="home-start" className="flex scroll-mt-16 flex-col items-center pt-10 text-center md:pt-16">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+        <CountryStreet />
+        <p className="mt-1 text-center text-xs text-muted-foreground">Hover a country to meet the people behind its shelves.</p>
+      </motion.div>
+      <section className="flex flex-col items-center pt-10 text-center">
+        <LittleShelf className="w-40 md:w-48" />
         <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
-          className="font-display max-w-3xl text-5xl font-extrabold leading-[0.95] md:text-7xl">
+          className="font-display mt-5 max-w-3xl text-5xl font-extrabold leading-[0.95] md:text-7xl">
           A little shelf.<br /><span className="text-primary">Anywhere.</span>
         </motion.h1>
         <p className="mt-5 max-w-md text-lg text-muted-foreground">Neighborhood shops share space. Small makers fill it.</p>
@@ -33,37 +35,12 @@ export default function Landing() {
       <div className="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">
         {JOURNEYS.map((j, i) => <JourneyCard key={j.id} j={j} i={i} />)}
       </div>
-      <section className="mx-auto mt-16 max-w-4xl" aria-labelledby="offers-title">
-        <h2 id="offers-title" className="font-display text-center text-3xl font-bold md:text-4xl">Two new shelves</h2>
-        <p className="mt-2 text-center text-muted-foreground">Food that would go to waste, and keepsakes that carry a place home.</p>
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {OFFERS.map((o, i) => {
-            const Icon = o.id === "expiring" ? Clock : Plane;
-            const n = liveCount(o.id);
-            return (
-              <motion.div key={o.id} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12, duration: 0.5 }}>
-                <Link href={`/offers/${o.id}`} data-testid={`link-offer-${o.id}`}
-                  className="group flex h-full flex-col items-center rounded-[2rem] border border-border p-8 text-center transition hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(120,60,30,.35)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30">
-                  <span className="grid h-20 w-20 place-items-center rounded-full bg-primary/10 text-primary transition duration-500 group-hover:scale-105"><Icon className="h-9 w-9" /></span>
-                  <h3 className="font-display mt-4 text-3xl font-bold">{o.title}</h3>
-                  <p className="mt-1 text-muted-foreground">{o.tagline}</p>
-                  {n > 0 && <p className="mt-2 text-xs text-muted-foreground">{n} on shelves now</p>}
-                  <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground transition group-hover:gap-3">
-                    {o.cta} <ArrowRight className="h-4 w-4" />
-                  </span>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
       <div className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-2 text-sm">
         {[["/scan", "I'm shopping · scan a shelf", "scan"], ...(!LIVE || session.me?.isAdmin ? [["/admin", "Platform admin console", "admin"]] : []), ["/guide", LIVE ? "How InRaf works" : "How this demo works", "guide"]].map(([href, label, id]) => (
           <Link key={id} href={href} data-testid={`link-secondary-${id}`} className="rounded-full border border-border px-4 py-2 text-muted-foreground transition hover:border-primary/40 hover:text-foreground">{label}</Link>
         ))}
       </div>
       <p className="mx-auto mt-4 max-w-xl text-center text-xs text-muted-foreground">{LIVE ? "Open to shops and makers in Egypt, Portugal, Hungary, Türkiye and the UAE. Accounts and listings are real; payments, e-signatures and settlements are still simulated, so no money moves yet." : "Demo across Egypt, Portugal, Hungary, Türkiye and the UAE. Contracts, payments and settlements are simulated in this browser only."}</p>
-      <img src={`${base}images/street.png`} alt="Three small shopfronts from different countries" className="mx-auto mt-16 w-full max-w-2xl opacity-90" />
     </Shell>
   );
 }
