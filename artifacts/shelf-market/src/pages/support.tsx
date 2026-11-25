@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { Shell, PageTitle } from "@/components/shell";
 import { Card } from "@/components/kit";
 import { LIVE } from "@/lib/store";
+import { COMPANY } from "@/lib/legal";
 
 const DEMO_FAQ: [string, string][] = [
   ["Who sells me the product?", "The token holder renting that shelf. The store provides the space; pricing, stock and product quality are the holder's responsibility."],
@@ -29,7 +30,7 @@ export default function Support() {
         {FAQ.map(([q, a]) => <Card key={q}><p className="font-medium">{q}</p><p className="mt-1 text-sm text-muted-foreground">{a}</p></Card>)}
         <Card>
           <p className="font-medium">Contact</p>
-          <p className="mt-1 text-sm text-muted-foreground">{LIVE ? "Support messaging, email and phone aren't connected yet." : "Support messaging, email and phone are not connected in this demo."} Use refund requests on your <Link href="/orders" className="text-primary underline" data-testid="link-orders">receipts</Link>.</p>
+          <p className="mt-1 text-sm text-muted-foreground">{LIVE ? <>Email us at <a href={`mailto:${COMPANY.email}`} className="text-primary underline" data-testid="link-support-email">{COMPANY.email}</a>.</> : "Support messaging, email and phone are not connected in this demo."} Use refund requests on your <Link href="/orders" className="text-primary underline" data-testid="link-orders">receipts</Link>.</p>
         </Card>
       </div>
     </Shell>

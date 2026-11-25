@@ -14,6 +14,10 @@ export interface RentalTerms {
   liability: string;
   display: string;
   dispute: string;
+  /** Days of written notice either side gives to end the contract early. Older contracts may lack it. */
+  noticeDays?: number;
+  /** Which country's law governs the contract, and which courts hear disputes. */
+  governingLaw?: string;
 }
 
 export interface Shop {

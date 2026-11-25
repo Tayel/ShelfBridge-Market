@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Minus, Plus, Save, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Lock, Mail, Minus, Plus, Save, Smartphone, Zap } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton, Tile, StepDots } from "@/components/shell";
 import { IsoFloor } from "@/components/iso-floor";
 import { ShelfArt } from "@/components/shelf-art";
 import { PhotoUploader, coverOf, photosComplete } from "@/components/photos";
 import {
   BUSINESSES, COUNTRIES, CATEGORIES, CANCELLATION, FEATURES, PRICING_LABEL, RESTRICTIONS, SHELF_TYPES,
-  businessOf, countryName, categoryLabel, shelfTypeLabel,
-} from "@/lib/data";
-import { LIVE, usd } from "@/lib/store";
+  businessOf, countryName, categoryLabel, shelfTypeLabel, localApprox } from "@/lib/data";
+import { LIVE, usd, useSession } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { useToast } from "@/hooks/use-toast";
@@ -72,7 +71,35 @@ function Stepper({ value, set, min, max, label, prefix = "", step = 1 }: { value
 
 const chipCls = (on: boolean) => `rounded-full border px-4 py-2 text-sm transition active:scale-95 ${on ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary/40"}`;
 
+/** On the live site, owners sign in before they start, so the shop they describe is saved to their account and nothing
+ *  is lost if the sign-in email opens on another phone or browser. */
 export default function Owner() {
+  const session = useSession();
+  if (session.live && !session.me) return <SignInFirst />;
+  return <OwnerForm />;
+}
+
+function SignInFirst() {
+  const [, go] = useLocation();
+  const product = useProduct();
+  const next = `/owner${product ? `?product=${product}` : ""}`;
+  return (
+    <Shell title="List your shop" back={product ? `/host?product=${product}` : "/host"}>
+      <div className="mx-auto mt-6 max-w-lg rounded-[2rem] border border-border p-8 text-center" data-testid="owner-signin-first">
+        <h1 className="font-display text-3xl font-bold">First, sign in with your email</h1>
+        <p className="mt-2 text-muted-foreground">It takes a minute and there's no password. Then describe your shop in about 10 minutes.</p>
+        <ul className="mx-auto mt-6 max-w-sm space-y-3 text-left text-sm">
+          <li className="flex gap-3"><Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />We email you a one-time link. New here? The same link creates your account.</li>
+          <li className="flex gap-3"><Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />Once you submit, your shop is saved to your account and you can manage it from any phone or computer.</li>
+          <li className="flex gap-3"><Lock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />Your business registration is only seen by you and the InRaf team.</li>
+        </ul>
+        <PrimaryButton className="mt-8 w-full" onClick={() => go(`/signin?next=${encodeURIComponent(next)}`)} data-testid="button-owner-signin">Sign in to start <ArrowRight className="h-4 w-4" /></PrimaryButton>
+      </div>
+    </Shell>
+  );
+}
+
+function OwnerForm() {
   const [, go] = useLocation();
   const { toast } = useToast();
   const product = useProduct();
@@ -122,7 +149,6 @@ export default function Owner() {
         <Tile key={b.code} selected={f.business === b.code} onClick={() => { set({ business: b.code }); setStep(1); }} testId={`tile-business-${b.code}`}>
           <b.icon className="h-9 w-9 text-primary" strokeWidth={1.5} />
           <span className="font-medium">{b.label}</span>
-          <span className="text-[10px] text-muted-foreground">ISIC {b.code}</span>
         </Tile>
       ))}
     </div>,
@@ -193,6 +219,7 @@ export default function Owner() {
       <div className="flex flex-col gap-6">
         <Stepper label="Shelves per spot" value={f.tiers} set={(n) => set({ tiers: n })} min={1} max={5} />
         <Stepper label="USD / month" value={f.price} set={(n) => set({ price: n })} min={5} max={250} prefix="$" />
+        {localApprox(f.price, f.country) && <p className="-mt-3 text-center text-sm font-semibold text-muted-foreground" data-testid="text-price-local">{localApprox(f.price, f.country)} per shelf a month</p>}
         <p className="text-center text-sm text-muted-foreground">{f.bricks.length * f.tiers} shelves to rent</p>
       </div>
     </div>,

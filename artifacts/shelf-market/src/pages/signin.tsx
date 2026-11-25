@@ -18,6 +18,7 @@ export default function SignIn() {
   const [devLink, setDevLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(expired ? "That sign-in link has expired or was already used. Ask for a new one." : null);
   const [busy, setBusy] = useState(false);
+  const [agree, setAgree] = useState(false);
 
   if (!session.live) {
     return (
@@ -47,7 +48,7 @@ export default function SignIn() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      const r = await auth.requestLink(email, name, next);
+      const r = await auth.requestLink(email, name, next, agree);
       if (r.ok) { setSent(true); setDevLink(r.devLink ?? null); } else setError(r.error ?? "Couldn't send the link.");
     } finally { setBusy(false); }
   };
@@ -71,9 +72,13 @@ export default function SignIn() {
             </div>
             <Field label="Email"><input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} data-testid="input-email" /></Field>
             <Field label="Your name" hint="Shown to store owners and makers you deal with. Optional if you already have an account."><input autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} data-testid="input-name" /></Field>
+            <label className="flex items-start gap-2 text-sm" data-testid="label-agree">
+              <input type="checkbox" required checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-agree" />
+              <span>I agree to the <Link href="/terms" className="text-primary underline">Terms</Link> and the <Link href="/privacy" className="text-primary underline">Privacy Policy</Link>.</span>
+            </label>
             <ErrorNote error={error} />
-            <PrimaryButton type="submit" className="w-full" disabled={busy || !email} data-testid="button-send-link">{busy ? "Sending…" : "Email me a sign-in link"}</PrimaryButton>
-            <p className="text-center text-xs text-muted-foreground">By continuing you agree to use InRaf as described in the <Link href="/guide" className="underline">guide</Link>. Payments on InRaf are still simulated.</p>
+            <PrimaryButton type="submit" className="w-full" disabled={busy || !email || !agree} data-testid="button-send-link">{busy ? "Sending…" : "Email me a sign-in link"}</PrimaryButton>
+            <p className="text-center text-xs text-muted-foreground">Payments on InRaf are still simulated: no money moves yet. <Link href="/about" className="underline">Who runs InRaf</Link></p>
           </form>
         )}
       </Card>

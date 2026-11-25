@@ -164,8 +164,8 @@ export function setViewRole(role: Role) {
 }
 
 export const auth = {
-  async requestLink(email: string, name: string, next: string) {
-    return api<{ devLink?: string }>("/auth/request", { method: "POST", body: JSON.stringify({ email, name, next }) });
+  async requestLink(email: string, name: string, next: string, acceptTerms: boolean) {
+    return api<{ devLink?: string }>("/auth/request", { method: "POST", body: JSON.stringify({ email, name, next, acceptTerms }) });
   },
   async logout() {
     await api("/auth/logout", { method: "POST", body: "{}" });

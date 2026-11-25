@@ -11,7 +11,7 @@ import {
   awaitingVersion, contractOfToken, contractStatus, executedVersion, invoiceStatus, isExpired, lateFeeFor,
   listingBlockReason, reservedQty, shelfBlockReason, shelfLabel, shelfUnits, takenSlots, slotsOf,
 } from "./selectors";
-import { CUSTOMER_SERVICE_FEE, EXPIRING_WINDOW_DAYS, PLATFORM_COMMISSION_PCT, demoTaxFor } from "./data";
+import { CUSTOMER_SERVICE_FEE, EXPIRING_WINDOW_DAYS, PLATFORM_COMMISSION_PCT, countryName, demoTaxFor } from "./data";
 import { addDays, addMonths, nowIso, round2, today, uid } from "./util";
 
 export class DemoError extends Error {}
@@ -50,6 +50,8 @@ export function defaultTerms(country: string): RentalTerms {
     liability: "Token holder bears risk for its products (damage, loss, expiry, prohibited goods, unsold stock) unless caused by the store owner's negligence.",
     display: "Products stay within the shelf footprint. Pricing is set by the token holder. Expired or recalled goods are removed within 48 hours.",
     dispute: "Parties first try good-faith resolution via the platform within 14 days, then a mediator agreed by both.",
+    noticeDays: 30,
+    governingLaw: `The laws of ${countryName(country)}. Disputes not settled by mediation go to the competent courts of the city where the store is located.`,
   };
 }
 
@@ -71,7 +73,8 @@ export function shopDefaults(p: Partial<Shop> & { id: string }): Shop {
     createdAt: nowIso(),
     ...p,
     country,
-    terms: { ...defaultTerms(country), ...(p.terms ?? {}) },
+    // A security deposit of one month's rent by default, so the store owner is covered for damage or unpaid rent.
+    terms: { ...defaultTerms(country), deposit: p.price ?? 30, ...(p.terms ?? {}) },
     listing: { ...defaultListing(), ...(p.listing ?? {}) },
     photos: Array.isArray(p.photos) ? p.photos : [],
   } as Shop;
@@ -100,11 +103,11 @@ export function createShop(s: State, input: ShopInput): string {
   const id = uid("shop");
   checkPhotos(input.photos ?? []);
   const { listing, months, ...rest } = input;
-  const base = shopDefaults({ id, country: input.country });
+  const base = shopDefaults({ id, country: input.country, price: input.price });
   s.shops.push(shopDefaults({ ...rest, id, listing: { ...base.listing, ...listing }, terms: { ...base.terms, months: months ?? base.terms.months }, seeded: false, status: "pending", address: `${input.location}, ${input.city}`, registration: `DEMO-${input.country}-${Math.floor(1000 + Math.random() * 8999)}` }));
   audit(s, ROLE_LABEL.owner, "store.submitted", id, `${input.name} submitted for platform approval`);
   notify(s, "admin", "New store awaiting approval", `${input.name} (${input.city}) was submitted.`, "/admin?tab=stores");
-  notify(s, "owner", "Store submitted", `${input.name} is pending platform approval (simulated admin).`, `/owner-dashboard/shops/${id}`);
+  notify(s, "owner", "Store submitted", `${input.name} is waiting for InRaf approval.`, `/owner-dashboard/shops/${id}`);
   return id;
 }
 
@@ -288,6 +291,16 @@ export function terminateContract(s: State, contractId: string, reason: string, 
   const c = contractOf(s, contractId);
   if (c.terminatedAt) fail("Already terminated.");
   if (!reason.trim()) fail("Give a short termination reason.");
+  // A maker who ends a running contract early owes the rent for the notice period, so the store owner isn't left with an
+  // empty shelf and no income overnight. The InRaf team can end a contract without it (fraud, prohibited goods).
+  const ex = executedVersion(c);
+  const notice = ex?.snapshot.terms.noticeDays ?? 0;
+  if (actor === "holder" && ex && contractStatus(c) === "active" && notice > 0) {
+    const amount = round2((ex.snapshot.terms.monthlyRent * notice) / 30);
+    if (amount > 0) {
+      s.invoices.push({ id: uid("inv"), ref: nextRef(s, "RNT"), contractId: c.id, version: ex.v, kind: "rent", label: `Notice period (${notice} days)`, amount, tax: 0, total: amount, dueDate: today() });
+    }
+  }
   c.terminatedAt = nowIso(); c.terminationReason = reason.trim();
   c.versions.filter((v) => v.status === "awaiting").forEach((v) => { v.status = "void"; v.note = "Voided by termination"; });
   s.invoices.filter((i) => i.contractId === c.id && !i.paidAt && !i.voidedAt && i.dueDate > today()).forEach((i) => { i.voidedAt = nowIso(); });

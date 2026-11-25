@@ -20,7 +20,7 @@ const MENU: { group: string; items: { href: string; label: string }[] }[] = [
   { group: "Store owner", items: [{ href: "/owner-dashboard", label: "Owner portal" }, { href: "/start?as=owner", label: "List a new shop" }] },
   { group: "Token holder", items: [{ href: "/dashboard", label: "Holder portal" }, { href: "/start?as=holder", label: "Find a shelf" }, { href: "/saved", label: "Saved shelves" }] },
   { group: "Customer", items: [{ href: "/offers/expiring", label: "About to expire" }, { href: "/offers/flying", label: "About to fly" }, { href: "/scan", label: LIVE ? "Scan a shelf" : "Scan a shelf (demo QR)" }, { href: "/orders", label: "My orders & receipts" }, { href: "/support", label: "Help & refunds" }] },
-  { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: LIVE ? "How InRaf works" : "Demo guide & limits" }, ...(FINCRIME_OS_URL ? [{ href: FINCRIME_OS_URL, label: "In-Raf FinCrime OS ↗" }] : [])] },
+  { group: "Platform", items: [{ href: "/admin", label: "Admin console" }, { href: "/notifications", label: "Notifications" }, { href: "/guide", label: LIVE ? "How InRaf works" : "Demo guide & limits" }, { href: "/about", label: "About & contact" }, ...(FINCRIME_OS_URL ? [{ href: FINCRIME_OS_URL, label: "In-Raf FinCrime OS ↗" }] : [])] },
 ];
 
 export function Logo() {
@@ -142,6 +142,9 @@ export function Shell({ children, title, back, wide }: { children: ReactNode; ti
       <footer className="border-t border-border/60 px-4 py-6 text-center text-xs text-muted-foreground">
         {live ? "Accounts and listings are real and shared. Payments, e-signatures and settlements are simulated: no money moves. Amounts in USD;" : "Browser-only demo. Amounts in demo USD;"} {" "}tax and fees are illustrative, not advice for any jurisdiction.{live ? " " : " No real payments, signatures, identity checks, email or SMS. "}
         <Link href="/guide" className="underline" data-testid="link-footer-guide">{live ? "How InRaf works" : "Read the demo guide"}</Link>
+        {" · "}<Link href="/about" className="underline" data-testid="link-footer-about">About & contact</Link>
+        {" · "}<Link href="/terms" className="underline" data-testid="link-footer-terms">Terms</Link>
+        {" · "}<Link href="/privacy" className="underline" data-testid="link-footer-privacy">Privacy</Link>
       </footer>
     </div>
   );

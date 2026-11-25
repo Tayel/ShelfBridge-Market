@@ -6,7 +6,7 @@ import { ArrowRight, BadgeCheck, Boxes, ChevronDown, Coins, IdCard, ShieldCheck,
 import { Shell, PrimaryButton } from "@/components/shell";
 import { Card } from "@/components/kit";
 import { ShopMap } from "@/components/listing-bits";
-import { PRODUCT_JOURNEY, countryName, shopServes } from "@/lib/data";
+import { PRODUCT_JOURNEY, RATES_AS_OF, countryName, localApprox, shopServes } from "@/lib/data";
 import { LIVE, useStore, usd } from "@/lib/store";
 
 /** Share of shelves assumed rented in the estimate. Illustrative only. */
@@ -54,6 +54,7 @@ function HostFor({ product }: { product: "expiring" | "flying" }) {
           <p className="mb-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary" data-testid="text-host-product">{j.title} · {j.owner.who}</p>
           <h1 className="font-display text-5xl font-extrabold leading-[0.95] md:text-6xl">{product === "flying" ? "Your empty airport shelves could earn" : "Your empty shelves could earn"}</h1>
           <p className="font-display mt-3 text-6xl font-extrabold text-primary md:text-7xl" data-testid="text-estimate">{usd(monthly).replace(".00", "")}<span className="text-2xl font-bold text-muted-foreground"> /month</span></p>
+          {localApprox(monthly, approved.find((s) => s.city === city)?.country) && <p className="mt-1 text-lg font-semibold text-muted-foreground" data-testid="text-estimate-local">{localApprox(monthly, approved.find((s) => s.city === city)?.country)} /month <span className="text-xs font-normal">(approx., {RATES_AS_OF} rates)</span></p>}
           <p className="mt-3 text-muted-foreground"><b className="text-foreground">{shelves} {product === "flying" ? "airport shelves" : "near-date shelves"}</b> at about {usd(avg).replace(".00", "")} each, {Math.round(OCCUPANCY * 100)}% rented</p>
           <p className="mt-4 max-w-md text-foreground/80 lg:max-w-none">{j.owner.pitch}</p>
           <input type="range" min={1} max={30} value={shelves} onChange={(e) => setShelves(Number(e.target.value))} className="mt-6 w-full max-w-md accent-[hsl(var(--primary))]" aria-label="Number of shelves" data-testid="input-shelves" />

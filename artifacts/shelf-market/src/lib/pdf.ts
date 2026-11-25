@@ -46,6 +46,8 @@ export function downloadContractPdf(c: Contract, v: ContractVersion, audit: Audi
   line(`Maintenance: ${t.maintenance}`);
   line(`Display & stock: ${t.display}`);
   line(`Liability: ${t.liability}`);
+  if (t.noticeDays) line(`Ending early: either side gives ${t.noticeDays} days' notice; a maker who ends a running contract early pays the rent for the notice period.`);
+  if (t.governingLaw) line(`Governing law: ${t.governingLaw}`);
   line(`Disputes: ${t.dispute}`);
   if (v.note) line(`Note: ${v.note}`);
   head("D. Execution record (simulated)");

@@ -92,11 +92,20 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       run(() => ops.createShop(s, a0 as ops.ShopInput));
       const shop = find(s.shops, id!, "Store");
       shop.ownerUserId = m.id;
+      // A real store carries its owner's real name and no made-up registration: the owner adds it in shop settings.
+      shop.ownerName = m.name || m.email.split("@")[0];
+      shop.registration = "";
       break;
     }
     case "updateShop": canManageShop(s, str(a0, "store"), actor); run(() => ops.updateShop(s, a0 as string, args[1] as Parameters<typeof ops.updateShop>[2])); break;
     case "deleteShop": canManageShop(s, str(a0, "store"), actor); run(() => ops.deleteShop(s, a0 as string)); break;
-    case "setShopStatus": admin(actor); run(() => ops.setShopStatus(s, str(a0, "store"), args[1] as "approved" | "suspended" | "pending", String(args[2] ?? ""))); break;
+    case "setShopStatus": {
+      admin(actor);
+      const shop = find(s.shops, str(a0, "store"), "Store");
+      if (args[1] === "approved" && !shop.seeded && !shop.registration.trim()) throw new ops.DemoError("Ask the owner to add the business registration number in shop settings before approving.");
+      run(() => ops.setShopStatus(s, shop.id, args[1] as "approved" | "suspended" | "pending", String(args[2] ?? "")));
+      break;
+    }
     case "reportShop": signedIn(actor); run(() => ops.reportShop(s, str(a0, "store"), String(args[1] ?? ""))); break;
 
     // ---------- contracts ----------

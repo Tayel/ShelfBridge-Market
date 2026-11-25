@@ -5,6 +5,7 @@
  */
 import crypto from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { TERMS_VERSION } from "../src/lib/legal";
 import { HttpError, q } from "./db";
 
 export interface Me { id: string; email: string; name: string; isAdmin: boolean; holderId: string }
@@ -91,9 +92,10 @@ async function sendEmail(to: string, link: string) {
 }
 
 /** Email a sign-in link. In local development without an email key, the link is returned for testing. */
-export async function requestLink(req: IncomingMessage, body: { email?: unknown; name?: unknown; next?: unknown }) {
+export async function requestLink(req: IncomingMessage, body: { email?: unknown; name?: unknown; next?: unknown; acceptTerms?: unknown }) {
   const email = String(body.email ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(email)) throw new HttpError(400, "Enter a valid email address.");
+  if (body.acceptTerms !== true) throw new HttpError(400, "Please agree to the Terms and the Privacy Policy to continue.");
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
   const ip = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "").split(",")[0].trim().slice(0, 64);
   const recent = await q<{ by_email: string; by_ip: string }>(
@@ -104,8 +106,8 @@ export async function requestLink(req: IncomingMessage, body: { email?: unknown;
   }
   const t = token();
   await q(
-    `insert into login_tokens (token_hash, email, name, next, ip, expires_at) values ($1, $2, $3, $4, $5, now() + interval '${LINK_MINUTES} minutes')`,
-    [hash(t), email, name || null, safeNext(body.next), ip],
+    `insert into login_tokens (token_hash, email, name, next, ip, terms_version, expires_at) values ($1, $2, $3, $4, $5, $6, now() + interval '${LINK_MINUTES} minutes')`,
+    [hash(t), email, name || null, safeNext(body.next), ip, TERMS_VERSION],
   );
   const link = `${appOrigin(req)}/api/auth/verify?token=${t}`;
   const sent = await sendEmail(email, link);
@@ -117,10 +119,10 @@ export async function requestLink(req: IncomingMessage, body: { email?: unknown;
 
 /** Open a sign-in link: one use only, then a session cookie and a redirect to where the person was going. */
 export async function verifyLink(req: IncomingMessage, res: ServerResponse, raw: string) {
-  const r = await q<{ email: string; name: string | null; next: string }>(
+  const r = await q<{ email: string; name: string | null; next: string; terms_version: string | null }>(
     `update login_tokens set used_at = now()
       where token_hash = $1 and used_at is null and expires_at > now()
-      returning email, name, next`, [hash(raw)]);
+      returning email, name, next, terms_version`, [hash(raw)]);
   const row = r.rows[0];
   if (!row) return { ok: false as const };
   const u = await q<{ id: string }>(
@@ -128,6 +130,8 @@ export async function verifyLink(req: IncomingMessage, res: ServerResponse, raw:
      on conflict (email) do update set last_login_at = now(),
        name = case when users.name = '' and excluded.name <> '' then excluded.name else users.name end
      returning id`, [crypto.randomUUID(), row.email, row.name]);
+  // Record which Terms and Privacy Policy this person agreed to when they asked for the link.
+  if (row.terms_version) await q("update users set terms_version = $2, terms_accepted_at = now() where id = $1", [u.rows[0].id, row.terms_version]);
   const s = token();
   await q(`insert into sessions (id_hash, user_id, expires_at) values ($1, $2, now() + interval '${SESSION_DAYS} days')`, [hash(s), u.rows[0].id]);
   setCookie(res, req, SESSION_COOKIE, s, SESSION_DAYS * 86400);

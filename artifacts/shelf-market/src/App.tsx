@@ -27,6 +27,7 @@ import Support from '@/pages/support';
 import Host from '@/pages/host';
 import Saved from '@/pages/saved';
 import SignIn from '@/pages/signin';
+import { About, Privacy, Terms } from '@/pages/legal';
 import { useSession } from '@/lib/store';
 import {
   Route,
@@ -68,6 +69,9 @@ function Router() {
         <Route path="/start" component={Start} />
         <Route path="/support" component={Support} />
         <Route path="/signin" component={SignIn} />
+        <Route path="/terms" component={Terms} />
+        <Route path="/privacy" component={Privacy} />
+        <Route path="/about" component={About} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

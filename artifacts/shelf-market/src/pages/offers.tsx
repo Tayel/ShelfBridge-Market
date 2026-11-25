@@ -62,7 +62,7 @@ export default function Offers() {
         <p className="mt-1">
           {offer.id === "expiring"
             ? "Rent a shelf, add the product and choose \"About to expire\": set the batch expiry (within 45 days) and the usual price, and shoppers see the saving."
-            : "Join a group-funded shelf in an airport shop, add a product made in that country and choose \"About to Fly Inside\": travellers read its story before they buy."}
+            : "Rent a section of a shared shelf in an airport shop, add a product made in that country and choose \"About to Fly Inside\": travellers read its story before they buy."}
         </p>
         <Link href={`/start?as=holder&product=${offer.id}`} className="mt-3 inline-flex items-center gap-1 font-semibold text-primary">Find a shelf <ArrowRight className="h-4 w-4" /></Link>
       </div>

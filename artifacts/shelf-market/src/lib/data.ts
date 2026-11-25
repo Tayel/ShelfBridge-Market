@@ -32,6 +32,24 @@ export const COUNTRIES = [
   { code: "CA", name: "Canada", priority: false },
 ];
 export const PRIORITY_COUNTRIES = COUNTRIES.filter((c) => c.priority);
+/**
+ * Local currency for each market, so owners see money the way they think about it. Amounts on InRaf are set in USD;
+ * these are approximate conversions for display only. Update RATES_AS_OF when the rates are refreshed.
+ */
+export const LOCAL_CURRENCY: Record<string, { code: string; perUsd: number }> = {
+  AE: { code: "AED", perUsd: 3.67 }, EG: { code: "EGP", perUsd: 49 }, TR: { code: "TRY", perUsd: 41 },
+  HU: { code: "HUF", perUsd: 350 }, PT: { code: "EUR", perUsd: 0.88 },
+};
+export const RATES_AS_OF = "November 2026";
+/** "≈ AED 110" for a USD amount in that country's currency, or "" where there's no local currency on file. */
+export function localApprox(usdAmount: number, country?: string): string {
+  const c = country ? LOCAL_CURRENCY[country] : undefined;
+  if (!c || !usdAmount) return "";
+  const v = usdAmount * c.perUsd;
+  const rounded = v >= 1000 ? Math.round(v / 10) * 10 : v >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
+  return `≈ ${c.code} ${rounded.toLocaleString("en-US")}`;
+}
+
 export const countryName = (c: string) => COUNTRIES.find((x) => x.code === c)?.name ?? c;
 export const businessOf = (c: string) => BUSINESSES.find((b) => b.code === c) ?? BUSINESSES[0];
 
@@ -57,7 +75,7 @@ export const categoryLabel = (id: string) => CATEGORIES.find((c) => c.id === id)
 export const EXPIRING_WINDOW_DAYS = 45;
 export const OFFERS = [
   { id: "expiring", title: "About to expire", tagline: "Good food from factories, close to its date.", sub: "Factories place stock that expires soon on neighbourhood shelves, at a lower price, so it sells instead of going to waste.", cta: "See near-date deals" },
-  { id: "flying", title: "About to Fly Inside", tagline: "National products from local manufacturers, at the airport.", sub: "A group-funded \"Made in Our Country\" shelf in airport shops: participants pool funds, source from local manufacturers, sell to travellers and share the rewards.", cta: "See airport shelves" },
+  { id: "flying", title: "About to Fly Inside", tagline: "National products from local manufacturers, at the airport.", sub: "A shared \"Made in Our Country\" shelf in airport shops: local makers split the cost of the space, each sells their own products to travellers and keeps their own sales.", cta: "See airport shelves" },
 ] as const;
 export type ProductId = (typeof OFFERS)[number]["id"];
 export const isProductId = (x: unknown): x is ProductId => x === "expiring" || x === "flying";
@@ -103,7 +121,7 @@ export const PRODUCT_JOURNEY: Record<ProductId, {
         ["What if stock reaches its date on my shelf?", "Batches must expire within 45 days and are listed with their date. The factory collects anything unsold before it expires; sales after the date are flagged to compliance."],
         ["Who sets the discount?", "The factory sets the offer price and the usual price. Shoppers see both, so the saving is clear."],
         ["Do I need a fridge?", "Only for chilled goods. Most near-date stock is packaged food and drinks that keep on an ordinary shelf."],
-        ["How do I get paid?", "Monthly rent, a share of each sale, or both — you choose. In this demo all payments are simulated."],
+        ["How do I get paid?", "Monthly rent, a share of each sale, or both — you choose. Payments are still simulated on InRaf, so no money moves yet."],
       ],
       cta: "List your shop for About to Expire",
     },
@@ -122,43 +140,43 @@ export const PRODUCT_JOURNEY: Record<ProductId, {
   flying: {
     title: "About to Fly Inside",
     headline: ["Together, We Retail", "at the Airport."],
-    summary: "A group-funded airport retail business that showcases national products, supports local manufacturers and shares the rewards.",
+    summary: "A shared airport shelf where local manufacturers split the cost of the space and each sells their own national products to travellers.",
     image: "images/product-fly-inside.jpg",
     illustration: "images/airport-kiosk.jpg",
     video: { preview: "videos/about-to-fly-preview.mp4", full: "videos/about-to-fly.mp4", label: "About to Fly Inside promotional video" },
-    imageAlt: "About to Fly Inside: a Made in Our Country shop at an airport gate, and the four steps — group fund, source local, retail together, manage and share.",
-    motto: "Pool. Purchase. Showcase. Share the success.",
+    imageAlt: "About to Fly Inside: a Made in Our Country shop at an airport gate, and four steps — share the space, make it local, retail together, get paid for your own sales.",
+    motto: "Share the space. Show your country. Sell to the world.",
     steps: [
-      { title: "Group fund", text: "Participants pool funds to rent shared display space in airport shops." },
-      { title: "Source local", text: "Products are bought together from local domestic manufacturers." },
+      { title: "Share the space", text: "Each maker rents their own section of a shared display in an airport shop, so nobody pays for a whole shelf alone." },
+      { title: "Make it local", text: "Every product is made in the airport's country and carries the story of where it comes from." },
       { title: "Retail together", text: "National products are shown under one retail brand at airport shops." },
-      { title: "Manage & share", text: "Sales and proceeds are managed centrally and shared fairly." },
+      { title: "Get paid for your own sales", text: "Each maker is paid for the products they sell, minus the disclosed InRaf commission. Nobody shares in anyone else's profit." },
     ],
-    pillars: ["Empower communities", "Support local manufacturers", "Showcase national products", "Share the rewards"],
+    pillars: ["Empower communities", "Support local manufacturers", "Showcase national products", "Share the cost, not the risk"],
     owner: {
-      pitch: "Host a \"Made in Our Country\" shelf for travellers: a pool of participants rents it, stocks it with national products from local manufacturers, and sells under one brand.",
+      pitch: "Host a \"Made in Our Country\" shelf for travellers: several local makers each rent a section of it, stock it with their own national products, and sell under one display.",
       who: "For shops and kiosks inside airports",
       promises: [
-        { title: "Rent from a group, paid up front", text: "Participants pool funds for the shelf, so rent doesn't depend on a single small maker." },
+        { title: "Rent from several makers", text: "Each section is rented by its own maker under its own contract, so one maker leaving doesn't empty the whole shelf." },
         { title: "Products travellers want", text: "National products from vetted local manufacturers — the gifts people look for before they fly." },
-        { title: "One brand, one contact", text: "The shelf is run as one \"Made in Our Country\" display, with stock and sales managed centrally." },
+        { title: "One display, one contact", text: "The shelf looks like one \"Made in Our Country\" display, and InRaf is your single contact for every maker on it." },
       ],
       faq: [
         ["Does it have to be airside?", "Any shop inside an airport terminal works — before or after security. Your airport's own retail rules still apply."],
-        ["Who decides what goes on the shelf?", "The group sources from local manufacturers; you approve every product before it goes on sale."],
-        ["How is the money shared?", "Sales are collected centrally; you receive rent (and a share of sales if you choose), and the rest is shared among the participants. Simulated in this demo."],
-        ["What about duty-free rules?", "This demo does not handle customs or duty-free licensing. Check with your airport operator."],
+        ["Who decides what goes on the shelf?", "Each maker proposes their own products; you approve every product before it goes on sale."],
+        ["How do I get paid?", "You receive the rent for each section (and a share of each sale if you choose). Each maker is paid only for their own sales. Payments are still simulated on InRaf."],
+        ["What about duty-free rules?", "InRaf doesn't handle customs or duty-free licensing. Check with your airport operator."],
       ],
       cta: "List your airport shop",
     },
     holder: {
       title: "Find a shelf at the airport",
-      pitch: "Join the retail community: hold a token in a group-funded airport shelf, stock it with national products from local manufacturers, and share in the sales.",
-      who: "For local manufacturers and community participants",
+      pitch: "Rent your own section of a shared airport shelf, stock it with the national products you make, and sell to travellers.",
+      who: "For local manufacturers",
       promises: [
-        { title: "Pool funds, share the space", text: "Airport space is costly alone; a token gives you a share of a shelf rented together." },
+        { title: "Share the space, not the risk", text: "Airport space is costly alone; a token is your right to use your own section of a shared shelf. It is not an investment." },
         { title: "Made in Our Country", text: "Products must be made in the airport's country, each with the story of where it comes from." },
-        { title: "Sales shared fairly", text: "Sales and proceeds are managed centrally and paid out by token." },
+        { title: "Your sales are yours", text: "You are paid for the products you sell, minus the disclosed InRaf commission." },
       ],
       cta: "Find an airport shelf",
     },

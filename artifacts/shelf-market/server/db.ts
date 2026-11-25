@@ -38,6 +38,9 @@ create table if not exists login_tokens (
   created_at timestamptz not null default now(), expires_at timestamptz not null, used_at timestamptz
 );
 create index if not exists login_tokens_email_idx on login_tokens (email, created_at);
+alter table login_tokens add column if not exists terms_version text;
+alter table users add column if not exists terms_version text;
+alter table users add column if not exists terms_accepted_at timestamptz;
 create index if not exists login_tokens_ip_idx on login_tokens (ip, created_at);
 create table if not exists sessions (
   id_hash text primary key, user_id text not null references users(id) on delete cascade,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localApprox } from "@/lib/data";
 import { Link, useParams } from "wouter";
 import { Shell, PrimaryButton } from "@/components/shell";
 import { Card, ErrorNote, Field, Notice, Pill, inputCls } from "@/components/kit";
@@ -73,12 +74,13 @@ function Form({ shop }: { shop: Shop }) {
         <Card className="space-y-4">
           <p className="font-display text-lg font-bold">Rental terms</p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Field label="Rent USD / month"><input disabled={ro} type="number" value={info.price} onChange={(e) => setInfo({ ...info, price: n(e.target.value) })} className={inputCls} data-testid="input-price" /></Field>
+            <Field label="Rent USD / month" hint={localApprox(info.price, shop.country) || undefined}><input disabled={ro} type="number" value={info.price} onChange={(e) => setInfo({ ...info, price: n(e.target.value) })} className={inputCls} data-testid="input-price" /></Field>
             <Field label="Duration (months)"><input disabled={ro} type="number" value={terms.months} onChange={(e) => setTerms({ ...terms, months: n(e.target.value) })} className={inputCls} data-testid="input-months" /></Field>
             <Field label="Deposit USD"><input disabled={ro} type="number" value={terms.deposit} onChange={(e) => setTerms({ ...terms, deposit: n(e.target.value) })} className={inputCls} data-testid="input-deposit" /></Field>
             <Field label="Tax % (illustrative)"><input disabled={ro} type="number" value={terms.taxRate} onChange={(e) => setTerms({ ...terms, taxRate: n(e.target.value) })} className={inputCls} data-testid="input-tax" /></Field>
             <Field label="Late fee %"><input disabled={ro} type="number" value={terms.lateFeePct} onChange={(e) => setTerms({ ...terms, lateFeePct: n(e.target.value) })} className={inputCls} data-testid="input-late" /></Field>
             <Field label="Grace days"><input disabled={ro} type="number" value={terms.graceDays} onChange={(e) => setTerms({ ...terms, graceDays: n(e.target.value) })} className={inputCls} data-testid="input-grace" /></Field>
+            <Field label="Notice to end early (days)" hint="A maker who leaves before the end pays rent for these days."><input disabled={ro} type="number" min={0} max={90} value={terms.noticeDays ?? 30} onChange={(e) => setTerms({ ...terms, noticeDays: Math.min(90, Math.max(0, n(e.target.value))) })} className={inputCls} data-testid="input-notice" /></Field>
           </div>
           <Field label="Renewal"><select disabled={ro} value={terms.renewal} onChange={(e) => setTerms({ ...terms, renewal: e.target.value as RentalTerms["renewal"] })} className={inputCls} data-testid="select-renewal"><option value="manual">Manual renewal (new signed version)</option><option value="auto-offer">Offer renewal before expiry</option><option value="none">No renewal</option></select></Field>
           {(["maintenance", "display", "liability", "dispute"] as const).map((k) => (

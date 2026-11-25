@@ -40,6 +40,8 @@ function Snapshot({ v }: { v: ContractVersion }) {
     ["Share of sales", t.pricing === "share" ? `share of sales only: the store keeps ${t.salesSharePct}% of each sale (before tax), no fixed rent` : t.pricing === "hybrid" ? `plus ${t.salesSharePct}% of each sale (before tax) kept by the store` : "fixed rent only"],
     ["Late payment", `${t.lateFeePct}% after ${t.graceDays} days`],
     ["Maintenance", t.maintenance], ["Display & stock", t.display], ["Liability", t.liability], ["Disputes", t.dispute],
+    ...(t.noticeDays ? [["Ending early", `Either side gives ${t.noticeDays} days' notice. A maker who ends a running contract early pays the rent for the notice period.`] as [string, string]] : []),
+    ...(t.governingLaw ? [["Governing law", t.governingLaw] as [string, string]] : []),
   ];
   return (
     <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[150px_1fr]" data-testid={`snapshot-v${v.v}`}>
