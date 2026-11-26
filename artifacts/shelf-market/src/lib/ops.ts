@@ -4,7 +4,7 @@
  * a payment provider, an e-signature service or a bank.
  */
 import type {
-  Contract, ContractSnapshot, ContractVersion, Holder, LedgerEntry, LedgerType, Listing, Order, OwnerRequest, RentInvoice,
+  Contract, ContractModel, ContractSnapshot, ContractVersion, Holder, LedgerEntry, LedgerType, Listing, Order, OwnerRequest, RentInvoice,
   RentalTerms, Role, Shop, ShopListing, ShopPhoto, State, Token, VersionKind,
 } from "./types";
 import {
@@ -84,7 +84,7 @@ export function shopDefaults(p: Partial<Shop> & { id: string }): Shop {
 export const rentOf = (shop: Shop) => (shop.listing.pricing === "share" ? 0 : shop.price);
 
 // ---------- stores ----------
-export type ShopInput = Pick<Shop, "name" | "country" | "city" | "location" | "business" | "width" | "depth" | "bricks" | "tiers" | "price" | "categories" | "restrictions" | "hue"> & Partial<Pick<Shop, "venue">> & {
+export type ShopInput = Pick<Shop, "name" | "country" | "city" | "location" | "business" | "width" | "depth" | "bricks" | "tiers" | "price" | "categories" | "restrictions" | "hue"> & Partial<Pick<Shop, "venue" | "place">> & {
   listing?: Partial<ShopListing>; months?: number; photos?: ShopPhoto[];
 };
 
@@ -98,6 +98,7 @@ function checkPhotos(photos: ShopPhoto[]) {
 export function createShop(s: State, input: ShopInput): string {
   if (!input.name.trim()) fail("Shop name is required.");
   if (input.bricks.length === 0) fail("Raise at least one shelf spot.");
+  if (input.place !== undefined && !(VENUES as readonly string[]).includes(input.place)) fail("Unknown kind of place.");
   const L = input.listing;
   if (L && (L.pricing === "share" || L.pricing === "hybrid") && !(L.salesSharePct! > 0 && L.salesSharePct! <= 50)) fail("Share of sales must be between 1% and 50%.");
   const id = uid("shop");
@@ -161,32 +162,82 @@ function snapshot(s: State, shop: Shop, token: Token, holder: Holder, start: str
   })) as ContractSnapshot;
 }
 
-export function requestContract(s: State, a: { shopId: string; slot: number; holderId: string; start: string; months?: number }): string {
+export interface ContractOfferInput { monthlyRent?: number; sharePct?: number; note?: string }
+
+/** The terms a contract would freeze for a model and an offer, checked against the listing. */
+function offerTerms(shop: Shop, model: ContractModel, months: number, offer: ContractOfferInput | undefined) {
+  if (months < shop.terms.months) fail(`${shop.name} rents shelves for at least ${shop.terms.months} months.`);
+  if (months > 36) fail("Rentals can run for up to 36 months.");
+  if (model === "consignment") {
+    const pct = Math.round(offer?.sharePct ?? (shop.listing.salesSharePct || 15));
+    if (!(pct >= 1 && pct <= 50)) fail("The store's commission must be between 1% and 50% of each sale.");
+    return { rent: 0, sharePct: pct, terms: { ...shop.terms, pricing: "share" as const, salesSharePct: pct } };
+  }
+  const listed = rentOf(shop);
+  const rent = offer?.monthlyRent !== undefined ? round2(offer.monthlyRent) : listed;
+  if (shop.listing.pricing !== "share" && !(rent > 0)) fail("Offer a monthly rent above zero.");
+  if (rent > 100_000) fail("That rent is too high to be right.");
+  const sharePct = shop.listing.pricing === "fixed" ? 0 : shop.listing.salesSharePct;
+  return { rent, sharePct, terms: undefined };
+}
+
+export function requestContract(s: State, a: { shopId: string; slot: number; holderId: string; start: string; months?: number; model?: ContractModel; offer?: ContractOfferInput }): string {
   const shop = shopOf(s, a.shopId);
   if (shop.status !== "approved") fail("This store isn't approved for rentals right now.");
   if (a.slot < 0 || a.slot >= slotsOf(shop)) fail("That shelf doesn't exist.");
   if (takenSlots(s, shop.id).has(a.slot)) fail("That shelf was just requested by someone else. Pick another.");
   if (!a.start || a.start < today()) fail("Start date can't be in the past.");
   const holder = holderOf(s, a.holderId);
-  const rent = rentOf(shop);
+  const model: ContractModel = a.model === "consignment" ? "consignment" : "rental";
   const months = a.months ?? shop.terms.months;
-  if (months < shop.terms.months) fail(`${shop.name} rents shelves for at least ${shop.terms.months} months.`);
-  if (months > 36) fail("Rentals can run for up to 36 months.");
+  const { rent, sharePct, terms } = offerTerms(shop, model, months, a.offer);
+  // The listing's own terms can be booked instantly; anything else is a proposal the owner has to accept.
+  const asListed = model === "rental" && rent === rentOf(shop);
   const tokenId = uid("tok"); const contractId = uid("ctr");
   const token: Token = { id: tokenId, shopId: shop.id, slot: a.slot, stage: "A", rent, createdAt: nowIso(), holderId: holder.id, contractId, sold: 0, revenue: 0, sales: [] };
   s.tokens.push(token);
-  const v: ContractVersion = { v: 1, kind: "original", createdAt: nowIso(), snapshot: snapshot(s, shop, token, holder, a.start, months, rent), status: "awaiting" };
-  const c: Contract = { id: contractId, ref: nextRef(s, "CTR"), tokenId, shopId: shop.id, holderId: holder.id, versions: [v], createdAt: nowIso() };
+  const v: ContractVersion = { v: 1, kind: "original", createdAt: nowIso(), snapshot: snapshot(s, shop, token, holder, a.start, months, rent, terms), status: "awaiting" };
+  const c: Contract = {
+    id: contractId, ref: nextRef(s, "CTR"), tokenId, shopId: shop.id, holderId: holder.id, versions: [v], createdAt: nowIso(), model,
+    offers: [{ by: "holder", monthlyRent: rent, months, sharePct, note: a.offer?.note?.trim().slice(0, 500) || undefined, at: nowIso() }],
+  };
   s.contracts.push(c);
-  audit(s, ROLE_LABEL.holder, "contract.requested", c.ref, `${holder.name} requested ${shelfLabel(shop, a.slot)} at ${shop.name}, v1 snapshot frozen`);
-  if (shop.listing.instantBook) {
+  audit(s, ROLE_LABEL.holder, "contract.requested", c.ref, `${holder.name} requested ${shelfLabel(shop, a.slot)} at ${shop.name} (${model}${asListed ? ", listed terms" : `, offer ${model === "consignment" ? `${sharePct}% commission` : `${rent}/mo`}`}), v1 snapshot frozen`);
+  if (shop.listing.instantBook && asListed) {
     // Instant book: the owner agreed to the standard terms when listing, so their side is recorded now.
     v.ownerSig = { name: shop.ownerName, at: nowIso(), via: "instant" };
     audit(s, "System", "contract.instant_book", c.ref, `${shop.name} uses Instant book; owner pre-agreement recorded on v1`);
   }
-  notify(s, "owner", "New shelf rental request", `${holder.name} requested ${shelfLabel(shop, a.slot)} at ${shop.name}. Review and sign.`, `/contracts/${c.id}`);
+  const what = model === "consignment" ? `a consignment placement (${sharePct}% commission)` : asListed ? shelfLabel(shop, a.slot) : `${shelfLabel(shop, a.slot)} with an offer of ${rent}/month`;
+  notify(s, "owner", asListed ? "New shelf rental request" : "New shelf offer", `${holder.name} requested ${what} at ${shop.name}. Accept by signing, or send a counter-offer.`, `/contracts/${c.id}`);
   notify(s, "admin", "Contract awaiting approval", `${c.ref} for ${shop.name} needs platform review.`, `/contracts/${c.id}`);
   notify(s, "holder", "Contract created", `${c.ref} is waiting for admin approval and both signatures.`, `/contracts/${c.id}`);
+  return c.id;
+}
+
+/**
+ * Counter-offer before anyone has signed the first version: the new terms replace the unsigned v1 (nothing signed
+ * is ever changed), any signatures or platform approval on it are cleared, and the other side is told.
+ */
+export function counterOffer(s: State, contractId: string, by: "holder" | "owner", a: { monthlyRent?: number; months: number; sharePct?: number; note?: string }) {
+  const c = contractOf(s, contractId);
+  if (c.terminatedAt) fail("This contract was terminated.");
+  if (c.versions.length !== 1 || c.versions[0].status !== "awaiting") fail("Offers can only change before the first version is signed. Use an amendment instead.");
+  const v = c.versions[0];
+  if (v.ownerSig && v.holderSig) fail("Both sides have already signed.");
+  const shop = shopOf(s, c.shopId); const token = tokenOf(s, c.tokenId);
+  const model: ContractModel = c.model ?? "rental";
+  const { rent, sharePct, terms } = offerTerms(shop, model, a.months, { monthlyRent: a.monthlyRent, sharePct: a.sharePct });
+  const last = (c.offers ?? []).at(-1);
+  if (last && last.monthlyRent === rent && last.months === a.months && last.sharePct === sharePct) fail("That's the same as the current offer. Sign it to accept.");
+  v.snapshot = snapshot(s, shop, token, holderOf(s, c.holderId), v.snapshot.terms.start, a.months, rent, terms);
+  v.ownerSig = undefined; v.holderSig = undefined; v.adminApproval = undefined;
+  token.rent = rent;
+  c.offers = [...(c.offers ?? []), { by, monthlyRent: rent, months: a.months, sharePct, note: a.note?.trim().slice(0, 500) || undefined, at: nowIso() }];
+  const terms_ = model === "consignment" ? `${sharePct}% commission` : `${rent}/month`;
+  audit(s, ROLE_LABEL[by], "contract.counter_offer", c.ref, `${by} proposed ${terms_} for ${a.months} months${a.note ? `: ${a.note}` : ""}`);
+  const other = by === "holder" ? "owner" : "holder";
+  notify(s, other, "Counter-offer received", `${c.ref}: ${terms_} for ${a.months} months. Accept by signing, or reply with your own offer.`, `/contracts/${c.id}`);
   return c.id;
 }
 

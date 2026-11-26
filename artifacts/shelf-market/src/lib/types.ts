@@ -34,6 +34,8 @@ export interface Shop {
   listing: ShopListing;
   /** "airport": a shop inside an airport, where About to Fly Inside shelves live. Absent: a neighbourhood shop. */
   venue?: "airport";
+  /** The kind of place, from the "I have a shop" journey (street, mall, airport, hotel...). Absent on older stores. */
+  place?: VenueType;
   photos: ShopPhoto[];
   /** Live mode: the account that owns this store. Absent on samples and in the browser-only demo. */
   ownerUserId?: string;
@@ -113,9 +115,18 @@ export interface ContractVersion {
   status: VersionStatus;
 }
 
+/** Model A rents the shelf; model B (consignment) places products that the store sells for a commission. */
+export type ContractModel = "rental" | "consignment";
+/** One step of the negotiation before anyone signs: who proposed what. */
+export interface ContractOffer { by: "holder" | "owner"; monthlyRent: number; months: number; sharePct: number; note?: string; at: string }
+
 export interface Contract {
   id: string; ref: string; tokenId: string; shopId: string; holderId: string;
   versions: ContractVersion[];
+  /** Absent on older contracts (= rental). */
+  model?: ContractModel;
+  /** Proposals and counter-proposals on the first version, oldest first. */
+  offers?: ContractOffer[];
   terminatedAt?: string; terminationReason?: string;
   createdAt: string;
 }

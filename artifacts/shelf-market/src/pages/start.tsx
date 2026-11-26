@@ -6,6 +6,7 @@ import { ProductVideo, useMouseHover } from "@/components/product-video";
 import { HowItWorks, JourneySteps, asset, nextStep, type JourneyRole } from "@/components/product-bits";
 import { PRODUCT_JOURNEY, isProductId, type ProductId } from "@/lib/data";
 import OwnerJourney from "./owner-journey";
+import { HolderDiscovery } from "@/components/holder-discovery";
 
 const ROLE: Record<JourneyRole, { label: string; ask: string; next: string }> = {
   owner: { label: "Apply as store owner", ask: "Which product will your shelves host?", next: "See what your shelves could earn" },
@@ -43,13 +44,14 @@ function HolderStart() {
             </button>
           ))}
         </div>
-        <JourneySteps at={product ? 2 : 1} />
+        {product && <JourneySteps at={2} />}
       </div>
 
       <AnimatePresence mode="wait">
         {!product ? (
-          <motion.section key="choose" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }} className="mt-10">
-            <h1 className="font-display text-center text-4xl font-extrabold md:text-5xl">{ROLE[role].ask}</h1>
+          <motion.section key="choose" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }} className="mt-2">
+            <HolderDiscovery />
+            <h2 className="font-display mt-20 text-center text-4xl font-extrabold md:text-5xl" id="products">{ROLE[role].ask}</h2>
             <p className="mt-3 text-center text-muted-foreground">InRaf runs two products. Pick one to see how it works before you apply.</p>
             <div className="mx-auto mt-10 grid max-w-5xl gap-6 md:grid-cols-2">
               {(Object.keys(PRODUCT_JOURNEY) as ProductId[]).map((p, i) => (

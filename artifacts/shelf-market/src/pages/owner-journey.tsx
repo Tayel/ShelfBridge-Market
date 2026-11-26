@@ -242,7 +242,7 @@ export default function OwnerJourney() {
       shop = {
         name: j.name.trim(), country: j.country, city: j.city.trim(), location: j.address.trim(), business: v.code,
         width, depth, bricks: Array.from({ length: N }, (_, i) => i), tiers: 1, price: Math.max(1, Math.round(m.rent / N)),
-        categories: shopCats.length ? shopCats : ["craft"], restrictions: [], hue: 12, venue: j.venue === "airport" ? "airport" : undefined,
+        categories: shopCats.length ? shopCats : ["craft"], restrictions: [], hue: 12, venue: j.venue === "airport" ? "airport" : undefined, place: j.venue,
         months: j.months, photos: j.photos,
         listing: {
           shelfType: biggest.kind as ShelfType,

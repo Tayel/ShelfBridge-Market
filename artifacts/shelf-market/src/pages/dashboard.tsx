@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import { Shell, PageTitle, PrimaryButton } from "@/components/shell";
 import { ShelfArt } from "@/components/shelf-art";
+import { MyOpportunities } from "@/components/my-opportunities";
 import { Card, Empty, ErrorNote, Pill, SmallButton, Stat, Tabs } from "@/components/kit";
 import { useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
@@ -19,7 +20,7 @@ export default function Dashboard() {
   const { holderId: YOU_HOLDER, me: account } = useSession();
   const [, go] = useLocation();
   const search = useSearch();
-  const [tab, setTab] = useState(new URLSearchParams(search).get("tab") ?? "shelves");
+  const [tab, setTab] = useState(new URLSearchParams(search).get("tab") ?? "opportunities");
   const { act, error, pending } = useAct();
   const me = st.holders.some((h) => h.id === YOU_HOLDER) || !account ? holderOf(st, YOU_HOLDER) : { ...holderOf(st, YOU_HOLDER), name: account.name || account.email };
   const tokens = st.tokens.filter((t) => t.holderId === YOU_HOLDER);
@@ -49,9 +50,11 @@ export default function Dashboard() {
   return (
     <Shell title="Holder portal" back="/">
       <PageTitle title="My shelves" sub={`${me.name} · token-holder view`}>
-        <Tabs value={tab} onChange={setTab} options={[{ id: "shelves", label: "Shelves", count: alerts.length }, { id: "contracts", label: "Contracts" }, { id: "orders", label: "Orders" }, { id: "money", label: "Money" }]} />
+        <Tabs value={tab} onChange={setTab} options={[{ id: "opportunities", label: "My retail opportunities" }, { id: "shelves", label: "Shelves", count: alerts.length }, { id: "contracts", label: "Contracts" }, { id: "orders", label: "Orders" }, { id: "money", label: "Money" }]} />
       </PageTitle>
       <div className="mx-auto mt-6 max-w-4xl"><ErrorNote error={error} /></div>
+
+      {tab === "opportunities" && <MyOpportunities st={st} holderId={YOU_HOLDER} />}
 
       {tab === "shelves" && (
         <div className="mx-auto mt-4 max-w-4xl space-y-4">
@@ -65,7 +68,7 @@ export default function Dashboard() {
             <div className="flex flex-col items-center text-center" data-testid="empty-tokens">
               <ShelfArt tiers={2} hue={12} fill={[null, null]} className="w-48" />
               <p className="mt-4 text-muted-foreground">No shelves yet.</p>
-              <PrimaryButton className="mt-6" onClick={() => go("/explore")} data-testid="button-explore">Find a shelf</PrimaryButton>
+              <PrimaryButton className="mt-6" onClick={() => go("/start?as=holder")} data-testid="button-explore">Find a shelf</PrimaryButton>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

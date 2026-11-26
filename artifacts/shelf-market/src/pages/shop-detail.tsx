@@ -3,6 +3,7 @@ import { Link, useLocation, useParams, useSearch } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeCheck, Clock, Flag, Gem, MapPin, MessageSquare, Ruler, Share2, ShieldCheck, Sparkles, Star, Users, Zap,
+  Eye,
 } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
 import { IsoFloor } from "@/components/iso-floor";
@@ -55,6 +56,11 @@ export default function ShopDetail() {
   const [reason, setReason] = useState("");
   const [start, setStart] = useState(() => { const q = params.get("start"); return q && q >= today() ? q : today(); });
   const [months, setMonths] = useState(() => Number(params.get("months")) || 0);
+  const [model, setModel] = useState<"rental" | "consignment">("rental");
+  const [offering, setOffering] = useState(false);
+  const [offerRent, setOfferRent] = useState(0);
+  const [sharePct, setSharePct] = useState(0);
+  const [offerNote, setOfferNote] = useState("");
   const { act, error, pending } = useAct();
   const taken = useMemo(() => (shop ? takenSlots(st, shop.id) : new Set<number>()), [st, shop]);
 
@@ -81,10 +87,15 @@ export default function ShopDetail() {
   const tax = round2((rent * T.taxRate) / 100);
   const lengths = [...new Set([T.months, 3, 6, 12, 24].filter((m) => m >= T.months))].sort((a, b) => a - b);
   const banned = CATEGORIES.filter((c) => !shop.categories.includes(c.id));
+  const pct = sharePct || L.salesSharePct || 15;
+  // Anything other than the listing's own rent is a proposal: the owner has to accept it (no instant booking).
+  const proposal = model === "consignment" || (offering && (offerRent || monthly) !== monthly);
+  const instant = L.instantBook && !proposal;
 
   const request = async () => {
     if (bi < 0 || tier === null) return;
-    const r = await act(() => actions.requestContract({ shopId: shop.id, slot: slot(bi, tier), holderId: YOU_HOLDER, start, months: term }), "Contract request created");
+    const offer = model === "consignment" ? { sharePct: pct, note: offerNote } : offering ? { monthlyRent: offerRent || monthly, note: offerNote } : offerNote.trim() ? { note: offerNote } : undefined;
+    const r = await act(() => actions.requestContract({ shopId: shop.id, slot: slot(bi, tier), holderId: YOU_HOLDER, start, months: term, model, offer }), proposal ? "Offer sent to the store owner" : "Contract request created");
     if (r.ok && r.id) go(`/contracts/${r.id}`);
   };
   const share = async () => {
@@ -254,6 +265,18 @@ export default function ShopDetail() {
                 <p className="mt-2 text-muted-foreground">{CANCELLATION[L.cancellation].text}</p>
               </div>
             </div>
+            <div className="mt-8 rounded-3xl border border-border p-5" data-testid="card-verification">
+              <p className="font-display text-xl font-bold">Check before you rent</p>
+              <p className="mt-1 text-sm text-muted-foreground">You may be renting in a country you've never visited, so here is what InRaf can confirm today, and what is still coming.</p>
+              <ul className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{shop.seeded ? "Sample store: it shows how InRaf works and can't be rented." : "Owner approved by InRaf after a business registration check."}</li>
+                <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{shop.photos.some((p) => p.source === "owner") ? "Photos taken by the owner of the actual shop and shelf." : "Stock photos of a similar shop (sample store)."}</li>
+                <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />Exact shelf, size ({shop.shelf.widthCm}×{shop.shelf.heightCm}×{shop.shelf.depthCm} cm) and position written into your contract.</li>
+                <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />A unique contract number, shelf ID and QR code once both of you sign.</li>
+                <li className="flex gap-2 text-muted-foreground"><Eye className="mt-0.5 h-4 w-4 shrink-0" />360° views, video walkthroughs and live shelf cameras: coming soon, where the store and local law allow.</li>
+                <li className="flex gap-2 text-muted-foreground"><Eye className="mt-0.5 h-4 w-4 shrink-0" />Escrow for rent and deposits: coming with real payments.</li>
+              </ul>
+            </div>
             {(!live || shop.registration) && <p className="mt-6 text-xs text-muted-foreground">Registration: {shop.registration}{live ? "" : " (demo value)"}</p>}
             <button onClick={() => setReport(true)} className="mt-2 inline-flex items-center gap-1.5 text-sm underline" data-testid="button-report"><Flag className="h-3.5 w-3.5" />Report this listing</button>
           </section>
@@ -270,6 +293,25 @@ export default function ShopDetail() {
             )}
             <p className="font-display text-2xl font-bold" data-testid="text-price">{priceText(shop)}</p>
             <p className="text-sm text-muted-foreground">{PRICING_LABEL[L.pricing]}{L.pricing !== "fixed" ? `: the shop keeps ${L.salesSharePct}% of each sale before your payout` : ""}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2" role="radiogroup" aria-label="How you work with this store">
+              {([["rental", "Rent the shelf", "Model A · monthly rent"], ["consignment", "Consignment", "Model B · store sells for a commission"]] as const).map(([k, l, h]) => (
+                <button key={k} type="button" role="radio" aria-checked={model === k} onClick={() => setModel(k)} data-testid={`model-${k}`}
+                  className={`rounded-2xl border-2 p-3 text-left transition ${model === k ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                  <span className="block text-sm font-semibold">{l}</span><span className="block text-[11px] text-muted-foreground">{h}</span>
+                </button>
+              ))}
+            </div>
+            {model === "rental" ? (
+              <div className="mt-3 rounded-2xl bg-muted/50 p-3 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={offering} onChange={(e) => { setOffering(e.target.checked); if (!offerRent) setOfferRent(monthly); }} data-testid="check-offer" />Propose a different monthly rent</label>
+                {offering && <label className="mt-2 flex items-center gap-2"><span className="text-muted-foreground">USD / month</span><input type="number" min={1} value={offerRent || ""} onChange={(e) => setOfferRent(Math.max(0, Number(e.target.value)))} className="w-28 rounded-xl border border-input bg-background px-3 py-1.5" data-testid="input-offer-rent" /></label>}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl bg-muted/50 p-3 text-sm">
+                <label className="flex items-center gap-2"><span className="text-muted-foreground">Store's commission per sale</span><input type="number" min={1} max={50} value={pct} onChange={(e) => setSharePct(Math.min(50, Math.max(1, Number(e.target.value))))} className="w-20 rounded-xl border border-input bg-background px-3 py-1.5" data-testid="input-share-pct" />%</label>
+                <p className="mt-1 text-[11px] text-muted-foreground">No rent. The store sells your products and keeps this share of each sale; you keep ownership of unsold stock.</p>
+              </div>
+            )}
             <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl border border-border">
               <label className="flex flex-col border-r border-border px-3 py-2">
                 <span className="text-[10px] font-bold uppercase">Start</span>
@@ -284,35 +326,51 @@ export default function ShopDetail() {
             </div>
             <p className="mt-2 text-xs text-muted-foreground">Ends {start ? fmtDate(addMonths(start, term)) : "—"} · {tier !== null ? `Shelf ${tier + 1} picked` : "Pick a shelf on the floor plan"}</p>
             <PrimaryButton className="mt-4 w-full" disabled={tier === null || !open} onClick={() => setConfirm(true)} data-testid="button-rent">
-              {L.instantBook && <Zap className="h-4 w-4" />}{L.instantBook ? "Book this shelf" : "Request this shelf"}
+              {instant && <Zap className="h-4 w-4" />}{proposal ? "Send my offer" : instant ? "Book this shelf" : "Request this shelf"}
             </PrimaryButton>
             <p className="mt-2 text-center text-xs text-muted-foreground">You won't be charged yet</p>
             {L.access === "premium" && <div className="mt-3"><Notice tone="info" testId="notice-premium">{PREMIUM_TOKEN_NOTE}</Notice></div>}
             <dl className="mt-4 space-y-1.5 text-sm" data-testid="price-breakdown">
-              {monthly > 0 && <div className="flex justify-between gap-2"><dt>{usd(monthly)} × {term} months</dt><dd>{usd(rent)}</dd></div>}
-              {monthly > 0 && <div className="flex justify-between gap-2"><dt>Tax ({T.taxRate}%, illustrative)</dt><dd>{usd(tax)}</dd></div>}
-              {T.deposit > 0 && <div className="flex justify-between gap-2"><dt>Deposit, returned at the end</dt><dd>{usd(T.deposit)}</dd></div>}
-              {L.pricing !== "fixed" && <div className="flex justify-between gap-2 text-muted-foreground"><dt>Share of sales</dt><dd>{L.salesSharePct}% per sale</dd></div>}
-              <div className="flex justify-between gap-2 border-t border-border pt-2 font-semibold"><dt>{L.pricing === "share" ? "Paid up front" : "Total over the term"}</dt><dd data-testid="text-term-total">{usd(round2(rent + tax + T.deposit))}</dd></div>
+              {model === "consignment" ? (
+                <>
+                  <div className="flex justify-between gap-2"><dt>Rent</dt><dd>None</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Store's commission</dt><dd>{pct}% of each sale</dd></div>
+                  {T.deposit > 0 && <div className="flex justify-between gap-2"><dt>Deposit, returned at the end</dt><dd>{usd(T.deposit)}</dd></div>}
+                  <div className="flex justify-between gap-2 border-t border-border pt-2 font-semibold"><dt>Paid up front</dt><dd data-testid="text-term-total">{usd(T.deposit)}</dd></div>
+                </>
+              ) : (() => {
+                const m = offering ? (offerRent || monthly) : monthly, r = round2(m * term), tx = round2((r * T.taxRate) / 100);
+                return (
+                  <>
+                    {m > 0 && <div className="flex justify-between gap-2"><dt>{usd(m)} × {term} months{offering ? " (your offer)" : ""}</dt><dd>{usd(r)}</dd></div>}
+                    {m > 0 && <div className="flex justify-between gap-2"><dt>Tax ({T.taxRate}%, illustrative)</dt><dd>{usd(tx)}</dd></div>}
+                    {T.deposit > 0 && <div className="flex justify-between gap-2"><dt>Deposit, returned at the end</dt><dd>{usd(T.deposit)}</dd></div>}
+                    {L.pricing !== "fixed" && <div className="flex justify-between gap-2 text-muted-foreground"><dt>Share of sales</dt><dd>{L.salesSharePct}% per sale</dd></div>}
+                    <div className="flex justify-between gap-2 border-t border-border pt-2 font-semibold"><dt>{L.pricing === "share" ? "Paid up front" : "Total over the term"}</dt><dd data-testid="text-term-total">{usd(round2(r + tx + T.deposit))}</dd></div>
+                  </>
+                );
+              })()}
             </dl>
-            <p className="mt-3 text-xs text-muted-foreground">{monthly > 0 ? "Rent is invoiced monthly once the platform approves and both sides sign." : "No rent invoices: the shop's share is taken from each sale."} Cancellation: {CANCELLATION[L.cancellation].label.toLowerCase()}.</p>
+            <p className="mt-3 text-xs text-muted-foreground">{model === "consignment" ? "No rent invoices: the store keeps its commission from each sale before your payout." : monthly > 0 ? "Rent is invoiced monthly once the platform approves and both sides sign." : "No rent invoices: the shop's share is taken from each sale."} Cancellation: {CANCELLATION[L.cancellation].label.toLowerCase()}.</p>
             {!open && <p className="mt-2 text-sm text-muted-foreground">This store isn't taking rentals ({shop.status}).</p>}
           </Card>
         </aside>
       </div>
 
-      <Modal open={confirm} onClose={() => setConfirm(false)} title={L.instantBook ? "Book this shelf" : "Request a contract"}>
+      <Modal open={confirm} onClose={() => setConfirm(false)} title={proposal ? "Send your offer" : instant ? "Book this shelf" : "Request a contract"}>
         <p className="text-sm text-muted-foreground">
           Shelf {tier !== null ? tier + 1 : ""} at {shop.name}, as <b>{live ? (account ? account.name || account.email : "you (you'll sign in next)") : holderOf(st, YOU_HOLDER).name}</b>.{" "}
-          {L.instantBook ? "This shop uses Instant book, so the owner's agreement is recorded straight away. The platform check and your signature are still needed." : "Nothing is active until the platform approves and both of you sign."}
+          {proposal ? "The owner can accept your offer by signing, or reply with a counter-offer. Nothing is active until the platform approves and both of you sign." : instant ? "This shop uses Instant book, so the owner's agreement is recorded straight away. The platform check and your signature are still needed." : "Nothing is active until the platform approves and both of you sign."}
         </p>
         <div className="mt-4 space-y-1 text-sm">
           <p>{fmtDate(start)} → {fmtDate(addMonths(start, term))} · {term} months</p>
-          <p>{priceText(shop)}{T.deposit ? ` · ${usd(T.deposit)} deposit` : ""}</p>
+          <p>{model === "consignment" ? `Consignment: no rent, ${pct}% commission to the store on each sale` : offering ? `Your offer: ${usd(offerRent || monthly)} a month (listed ${usd(monthly)})` : priceText(shop)}{T.deposit ? ` · ${usd(T.deposit)} deposit` : ""}</p>
+          <label className="mt-3 block"><span className="text-xs text-muted-foreground">Message to the owner (optional)</span>
+            <textarea value={offerNote} onChange={(e) => setOfferNote(e.target.value.slice(0, 500))} rows={2} className={inputCls} placeholder="What you'll sell, when you can stock it, any questions" data-testid="input-offer-note" /></label>
           <ErrorNote error={error} />
         </div>
         <div className="mt-6 flex flex-col gap-2">
-          <PrimaryButton disabled={pending} onClick={request} data-testid="button-confirm-rent">{L.instantBook ? "Book and continue to contract" : "Create contract request"}</PrimaryButton>
+          <PrimaryButton disabled={pending} onClick={request} data-testid="button-confirm-rent">{proposal ? "Send offer" : instant ? "Book and continue to contract" : "Create contract request"}</PrimaryButton>
           <GhostButton onClick={() => setConfirm(false)} data-testid="button-cancel-rent">Cancel</GhostButton>
         </div>
       </Modal>

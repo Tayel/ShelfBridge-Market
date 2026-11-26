@@ -3,7 +3,7 @@ import { Link, useParams } from "wouter";
 import { Check, Download, FileText, RefreshCw, ShieldCheck, Signature as SigIcon, XCircle } from "lucide-react";
 import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
 import { Card, ErrorNote, Field, Modal, Notice, Pill, SmallButton, inputCls } from "@/components/kit";
-import { LIVE, useSession, useStore, usd } from "@/lib/store";
+import { LIVE, isMine, useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { awaitingVersion, contractStatus, executedVersion, invoiceStatus, lateFeeFor } from "@/lib/selectors";
@@ -25,9 +25,10 @@ function SigRow({ label, sig, testId }: { label: string; sig?: Signature; testId
   );
 }
 
-function Snapshot({ v }: { v: ContractVersion }) {
+function Snapshot({ v, model }: { v: ContractVersion; model?: "rental" | "consignment" }) {
   const s = v.snapshot; const t = s.terms;
   const rows: [string, string][] = [
+    ["Model", model === "consignment" ? "B · Consignment: the store sells the renter's products and keeps a commission on each sale; the renter owns unsold stock" : "A · Shelf rental: the renter rents the space and manages their own products"],
     ["Store", `${s.store.name}, ${s.store.address}, ${countryName(s.store.country)}`],
     [LIVE ? "Registration" : "Registration (demo)", s.store.registration],
     ["Owner", s.store.ownerName],
@@ -61,6 +62,7 @@ export default function ContractPage() {
   const [months, setMonths] = useState(6);
   const [rent, setRent] = useState(0);
   const [note, setNote] = useState("");
+  const [co, setCo] = useState<{ rent: number; months: number; pct: number; note: string } | null>(null);
 
   const c = st.contracts.find((x) => x.id === id);
   if (!c) return <Shell title="Contract not found" back="/dashboard"><p className="mt-20 text-center text-muted-foreground">No contract here. <Link href="/dashboard" className="text-primary underline">Holder portal</Link></p></Shell>;
@@ -128,13 +130,56 @@ export default function ContractPage() {
             </Card>
           )}
 
+          {(c.offers?.length ?? 0) > 0 && (() => {
+            const open = c.versions.length === 1 && c.versions[0].status === "awaiting" && !c.terminatedAt && !(c.versions[0].ownerSig && c.versions[0].holderSig);
+            const sides: ("holder" | "owner")[] = [...(c.holderId === session.holderId ? ["holder" as const] : []), ...(shop && isMine(shop, session) ? ["owner" as const] : [])];
+            const cons = c.model === "consignment";
+            const last = c.offers!.at(-1)!;
+            const send = async (by: "holder" | "owner") => {
+              if (!co) return;
+              const r = await act(() => actions.counterOffer(c.id, by, { monthlyRent: cons ? undefined : co.rent, sharePct: cons ? co.pct : undefined, months: co.months, note: co.note }), "Counter-offer sent");
+              if (r.ok) setCo(null);
+            };
+            return (
+              <Card testId="card-negotiation">
+                <h2 className="font-display text-xl font-bold">Negotiation</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{open ? "Accept the latest offer by signing it, or reply with your own. Each new offer replaces the unsigned draft and clears any signatures on it." : "Agreed. The signed version below is what counts."}</p>
+                <ol className="mt-4 space-y-2" data-testid="offer-thread">
+                  {c.offers!.map((o, i) => (
+                    <li key={i} className={`rounded-2xl border p-3 text-sm ${i === c.offers!.length - 1 ? "border-primary/40 bg-primary/5" : "border-border"}`}>
+                      <p className="font-semibold">{o.by === "holder" ? holder.name : shop?.ownerName ?? "Store owner"} · {cons ? `${o.sharePct}% commission` : `${usd(o.monthlyRent)} a month`} · {o.months} months</p>
+                      {o.note && <p className="mt-0.5 text-muted-foreground">“{o.note}”</p>}
+                      <p className="text-xs text-muted-foreground">{fmtTime(o.at)}{i === c.offers!.length - 1 ? " · current offer" : ""}</p>
+                    </li>
+                  ))}
+                </ol>
+                {open && sides.length > 0 && !co && <SmallButton onClick={() => { clearError(); setCo({ rent: last.monthlyRent, months: last.months, pct: last.sharePct || 15, note: "" }); }} testId="button-counter">Make a counter-offer</SmallButton>}
+                {open && co && (
+                  <div className="mt-3 space-y-3 rounded-2xl border border-border p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {cons ? <Field label="Store's commission (%)"><input type="number" min={1} max={50} value={co.pct} onChange={(e) => setCo({ ...co, pct: Number(e.target.value) })} className={inputCls} data-testid="input-counter-pct" /></Field>
+                        : <Field label="Monthly rent (USD)"><input type="number" min={1} value={co.rent} onChange={(e) => setCo({ ...co, rent: Number(e.target.value) })} className={inputCls} data-testid="input-counter-rent" /></Field>}
+                      <Field label="Months"><input type="number" min={1} max={36} value={co.months} onChange={(e) => setCo({ ...co, months: Number(e.target.value) })} className={inputCls} data-testid="input-counter-months" /></Field>
+                    </div>
+                    <Field label="Message (optional)"><textarea rows={2} value={co.note} onChange={(e) => setCo({ ...co, note: e.target.value.slice(0, 500) })} className={inputCls} data-testid="input-counter-note" /></Field>
+                    <ErrorNote error={error} />
+                    <div className="flex flex-wrap gap-2">
+                      {sides.map((sd) => <PrimaryButton key={sd} disabled={pending} onClick={() => void send(sd)} data-testid={`button-send-counter-${sd}`}>{sides.length > 1 ? `Send as ${sd === "owner" ? "store owner" : "renter"}` : "Send counter-offer"}</PrimaryButton>)}
+                      <GhostButton onClick={() => setCo(null)}>Cancel</GhostButton>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
+
           <Card>
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-display text-xl font-bold">Agreement · v{shown.v}</h2>
               <SmallButton onClick={() => downloadContractPdf(c, shown, trail.slice().reverse())} testId="button-download-pdf"><Download className="h-4 w-4" />{LIVE ? "PDF" : "PDF (demo)"}</SmallButton>
             </div>
             {shown.note && <p className="mt-2 text-sm text-muted-foreground">{shown.note}</p>}
-            <div className="mt-4"><Snapshot v={shown} /></div>
+            <div className="mt-4"><Snapshot v={shown} model={c.model} /></div>
             <p className="mt-3 text-xs text-muted-foreground">Snapshot frozen at creation. Later store edits do not change this version.</p>
           </Card>
 

@@ -77,6 +77,9 @@ export function Terms() {
           <li>Late payment fees and a grace period as shown in the contract.</li>
           <li><b>Governing law:</b> the law of the country where the store is located, with disputes first raised through InRaf, then mediation, then the courts of the store’s city.</li>
         </ul>
+        <p><b>Two models.</b> In a <b>shelf rental</b> (model A) the maker pays rent for the space and manages their own products. In <b>consignment</b> (model B) there is no rent: the store sells the maker’s products and keeps the agreed commission on each sale, and the maker owns the stock until it sells. Each model has its own terms in the contract.</p>
+        <p><b>Offers.</b> Before anyone signs, the maker and the store owner may propose different rent, commission or length. Each new offer replaces the unsigned draft; only the version both sides sign counts.</p>
+        <p><b>Tokens and shelves.</b> Holding an InRaf token or account does not by itself give you ownership of, or a right to, any physical shelf. Your rights to a shelf come only from the contract you sign and these Terms.</p>
         <p>Typed names record each side’s agreement on InRaf. In some countries a certified electronic signature or a signed paper copy may be needed for the contract to be enforceable; you can download the contract as a PDF.</p>
       </Section>
       <Section n={8} title="Not allowed">

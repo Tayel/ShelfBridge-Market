@@ -10,6 +10,7 @@ export const actions = {
   setShopStatus: (id: string, status: "approved" | "suspended" | "pending", note: string) => call("setShopStatus", [id, status, note], (d) => ops.setShopStatus(d, id, status, note)),
   deleteShop: (id: string) => call("deleteShop", [id], (d) => ops.deleteShop(d, id)),
   requestContract: (a: Parameters<typeof ops.requestContract>[1]) => call("requestContract", [a], (d) => ops.requestContract(d, a)),
+  counterOffer: (id: string, by: "holder" | "owner", a: Parameters<typeof ops.counterOffer>[3]) => call("counterOffer", [id, by, a], (d) => ops.counterOffer(d, id, by, a)),
   approveContract: (id: string, name: string) => call("approveContract", [id, name], (d) => ops.approveContract(d, id, name)),
   rejectVersion: (id: string, reason: string) => call("rejectVersion", [id, reason], (d) => ops.rejectVersion(d, id, reason)),
   sign: (id: string, party: "owner" | "holder", name: string, simulated: boolean) => call("sign", [id, party, name, simulated], (d) => ops.signContract(d, id, party, name, simulated ? "simulated" : "ui")),

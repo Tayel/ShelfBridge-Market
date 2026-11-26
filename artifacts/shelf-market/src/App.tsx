@@ -23,6 +23,7 @@ import Notifications from '@/pages/notifications';
 import Guide from '@/pages/guide';
 import Offers from '@/pages/offers';
 import Start from '@/pages/start';
+import Opportunities from "./pages/opportunities";
 import Support from '@/pages/support';
 import Host from '@/pages/host';
 import Saved from '@/pages/saved';
@@ -67,6 +68,7 @@ function Router() {
         <Route path="/guide" component={Guide} />
         <Route path="/offers/:id" component={Offers} />
         <Route path="/start" component={Start} />
+        <Route path="/opportunities/:id" component={Opportunities} />
         <Route path="/support" component={Support} />
         <Route path="/signin" component={SignIn} />
         <Route path="/terms" component={Terms} />

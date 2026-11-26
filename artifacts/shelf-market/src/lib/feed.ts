@@ -45,7 +45,7 @@ export function buildComplianceFeed(s: State, opts: { live?: boolean } = {}) {
     makers: s.holders.map((h) => ({ id: h.id, name: h.name.replace(/\s*\(sample\)$/, ""), kind: h.kind, country: h.country, registration: h.registration, verification: h.verification })),
     contracts: s.contracts.map((c) => {
       const v = c.versions[c.versions.length - 1];
-      return { id: c.id, ref: c.ref, shopId: c.shopId, makerId: c.holderId, status: c.terminatedAt ? "terminated" : v.status, monthlyRent: v.snapshot.terms.monthlyRent, start: v.snapshot.terms.start, end: v.snapshot.terms.end };
+      return { id: c.id, ref: c.ref, shopId: c.shopId, makerId: c.holderId, status: c.terminatedAt ? "terminated" : v.status, monthlyRent: v.snapshot.terms.monthlyRent, start: v.snapshot.terms.start, end: v.snapshot.terms.end, model: c.model ?? "rental", commissionPct: v.snapshot.terms.salesSharePct ?? 0, offers: c.offers?.length ?? 0 };
     }),
     listings: s.listings.filter((l) => l.status !== "removed").map((l) => ({
       id: l.id, shopId: l.shopId, makerId: l.holderId, name: l.name, sku: l.sku, category: l.category, origin: l.origin,

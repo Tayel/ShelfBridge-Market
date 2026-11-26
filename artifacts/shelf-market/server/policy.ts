@@ -132,6 +132,16 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       run(() => ops.requestContract(s, { ...a, holderId: m.holderId }));
       break;
     }
+    case "counterOffer": {
+      const m = signedIn(actor);
+      const c = find(s.contracts, str(a0, "contract"), "Contract");
+      const by = args[1];
+      if (by === "owner") need(ownsShop(s, c.shopId, m), "Only the store owner can make an offer for the store.");
+      else if (by === "holder") need(isHolder(c.holderId, m), "Only the renter can make an offer as the renter.");
+      else throw new HttpError(400, "Invalid party.");
+      run(() => ops.counterOffer(s, c.id, by, (args[2] ?? {}) as Parameters<typeof ops.counterOffer>[3]));
+      break;
+    }
     case "approveContract": admin(actor); run(() => ops.approveContract(s, str(a0, "contract"), me!.name || me!.email)); break;
     case "rejectVersion": admin(actor); run(() => ops.rejectVersion(s, str(a0, "contract"), String(args[1] ?? ""))); break;
     case "sign": {
