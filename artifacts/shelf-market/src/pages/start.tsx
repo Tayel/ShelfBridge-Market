@@ -51,15 +51,6 @@ function HolderStart() {
         {!product ? (
           <motion.section key="choose" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }} className="mt-2">
             <HolderDiscovery />
-            <h2 className="font-display mt-20 text-center text-4xl font-extrabold md:text-5xl" id="products">{ROLE[role].ask}</h2>
-            <p className="mt-3 text-center text-muted-foreground">InRaf runs two products. Pick one to see how it works before you apply.</p>
-            <div className="mx-auto mt-10 grid max-w-5xl gap-6 md:grid-cols-2">
-              {(Object.keys(PRODUCT_JOURNEY) as ProductId[]).map((p, i) => (
-                <motion.div key={p} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.12, duration: 0.45 }}>
-                  <ProductCard product={p} role={role} href={url(p)} />
-                </motion.div>
-              ))}
-            </div>
           </motion.section>
         ) : (
           <Explain key={product} product={product} role={role} onBack={() => go(url(null))} onOther={() => go(url(product === "expiring" ? "flying" : "expiring"))} onNext={() => go(nextStep(role, product))} />

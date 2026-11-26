@@ -1,93 +1,175 @@
-import { Link } from "wouter";
-import { motion } from "framer-motion";
-import { ArrowRight, Eye, FileSignature, Globe2, Handshake, KeyRound, MonitorSmartphone, Search, ShieldCheck } from "lucide-react";
-import { ProductVideo, useMouseHover } from "@/components/product-video";
-import { SceneArt } from "@/components/owner-scenes";
+import { useState } from "react";
+import { createPortal } from "react-dom";
+import { Link, useLocation } from "wouter";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, CalendarClock, Check, Clock, Package, Plane, Recycle, Shirt, ShoppingBag, Store, Volume2, type LucideIcon } from "lucide-react";
+import { Player } from "@/components/product-video";
+import { LoopVideo } from "@/components/loop-video";
+import { PRODUCT_JOURNEY, type ProductId } from "@/lib/data";
 import { OPPORTUNITIES, freeShelves, geography, storesFor, type OpportunityId } from "@/lib/opportunities";
 import { useStore } from "@/lib/store";
 
-const STEPS = [
-  { icon: Search, t: "Discover" }, { icon: Globe2, t: "Explore the country and store" }, { icon: Eye, t: "Inspect the exact shelf" },
-  { icon: ShieldCheck, t: "Check the owner" }, { icon: Handshake, t: "Negotiate" }, { icon: FileSignature, t: "Sign" },
-  { icon: KeyRound, t: "Get your shelf ID and QR" }, { icon: MonitorSmartphone, t: "Track sales and stock" },
+const ICON: Record<OpportunityId, LucideIcon> = { airport: Plane, mall: ShoppingBag, independent: Store, fashion: Shirt, outlet: Recycle, "expiring-rentals": CalendarClock };
+const SHORT: Record<OpportunityId, string> = { airport: "Airport duty-free", mall: "Shopping malls", independent: "Local boutiques", fashion: "Fashion space", outlet: "Outlet & near-date", "expiring-rentals": "Freeing up soon" };
+const JOURNEY = ["Choose channel", "Select product", "Verify & apply", "Go live"];
+const ROADMAP = [
+  { t: "Offer & owner", d: "You send a request or an offer; the store owner accepts or counters." },
+  { t: "InRaf check & contract", d: "InRaf reviews it, then you both sign the contract." },
+  { t: "Shelf live", d: "You get your shelf ID and QR code, stock it and start selling." },
 ];
 
 /**
- * "Explore global retail opportunities": the start of the token holder journey. One picture made of six kinds of
- * shelf; each tile opens its country → city → store → shelf exploration. Airport and outlet tiles keep InRaf's
- * own product videos. Counts come from real stores; a kind with none yet says "Coming soon".
+ * "Apply to hold a retail token": the start of the token holder journey, laid out as one organised screen — a
+ * four-step journey bar, InRaf's two product films side by side (looping silently, with sound on request), and three
+ * steps: pick a retail channel, pick a product type, then see the roadmap and start. Counts come from real stores.
  */
 export function HolderDiscovery() {
   const st = useStore();
+  const [, go] = useLocation();
+  const [channel, setChannel] = useState<OpportunityId>("airport");
+  const [type, setType] = useState<"standard" | "near-expiry">("standard");
+  const at = 2; // a channel and a product type are always picked, so "Verify & apply" is next
+
+  const start = () => go(`/opportunities/${channel}${type === "near-expiry" ? "?type=near-expiry" : ""}`);
+
   return (
-    <section className="mt-8" data-testid="holder-discovery">
-      <div className="mx-auto max-w-3xl text-center">
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">From token holder to global retail presence</p>
-        <h1 className="font-display mt-2 text-4xl font-extrabold leading-[1.05] md:text-6xl">Explore global retail opportunities</h1>
-        <p className="mt-4 text-lg text-muted-foreground">Rent a real shelf in an airport, a mall or a boutique, from verified store owners. Inspect it remotely, agree the terms, sign, and follow your sales from your InRaf account.</p>
-      </div>
-
-      {/* One picture: six kinds of shelf, side by side in one frame. */}
-      <div className="mx-auto mt-10 max-w-6xl overflow-hidden rounded-[2rem] border border-border bg-card p-2 shadow-[0_40px_80px_-50px_rgba(120,60,30,.55)]">
-        <div className="grid gap-2 md:grid-cols-4 md:grid-rows-2">
-          {OPPORTUNITIES.map((o, i) => <Tile key={o.id} id={o.id} size={i === 0 ? "hero" : i === OPPORTUNITIES.length - 1 ? "wide" : "small"} delay={i * 0.06} st={st} />)}
-        </div>
-      </div>
-
-      <ol className="mx-auto mt-10 grid max-w-6xl grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8" aria-label="How it works">
-        {STEPS.map((s, i) => (
-          <li key={s.t} className="flex flex-col items-center gap-2 rounded-3xl border border-border p-3 text-center">
-            <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary"><s.icon className="h-5 w-5" /><span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{i + 1}</span></span>
-            <span className="text-xs font-medium leading-tight">{s.t}</span>
+    <section className="mt-4" data-testid="holder-discovery">
+      {/* Journey bar */}
+      <ol className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm" aria-label="Your journey" data-testid="holder-journey">
+        {JOURNEY.map((s, i) => (
+          <li key={s} className="flex items-center gap-3">
+            <span className={`inline-flex items-center gap-2 font-semibold ${i <= at ? "text-foreground" : "text-muted-foreground"}`}>
+              <span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${i < at ? "bg-primary text-primary-foreground" : i === at ? "border-2 border-primary text-primary" : "border border-border"}`}>{i < at ? <Check className="h-3.5 w-3.5" /> : i + 1}</span>
+              {s}
+            </span>
+            {i < JOURNEY.length - 1 && <span className={`hidden h-0.5 w-10 rounded sm:block ${i < at ? "bg-primary" : "bg-border"}`} />}
           </li>
         ))}
       </ol>
 
-      <div className="mx-auto mt-8 grid max-w-6xl gap-4 md:grid-cols-2">
-        <div className="rounded-[2rem] border border-border p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Model A</p>
-          <p className="font-display text-xl font-bold">Rent a shelf</p>
-          <p className="mt-1 text-sm text-muted-foreground">You rent the space for a monthly rent and manage your own products on it. The contract sets the shelf, access, duties and your right to check it.</p>
-        </div>
-        <div className="rounded-[2rem] border border-border p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Model B</p>
-          <p className="font-display text-xl font-bold">Place products on consignment</p>
-          <p className="mt-1 text-sm text-muted-foreground">No rent: the store sells your products for you and keeps an agreed commission on each sale. You still own the stock until it sells.</p>
-        </div>
+      <div className="mx-auto mt-10 max-w-3xl text-center">
+        <h1 className="font-display text-4xl font-extrabold leading-[1.05] md:text-6xl">Apply to hold a retail token</h1>
+        <p className="mt-4 text-lg text-muted-foreground">Rent a real shelf in an airport, a mall or a boutique from verified store owners. Pick a channel and a product type, check the shelf, agree the terms and go live.</p>
       </div>
-      <p className="mx-auto mt-4 max-w-3xl text-center text-xs text-muted-foreground">Holding an InRaf token doesn't give you a shelf by itself: your rights to a shelf come from the contract you sign with the store.</p>
+
+      {/* The two product films, side by side */}
+      <div className="mx-auto mt-10 grid max-w-6xl gap-5 md:grid-cols-2" data-testid="holder-videos">
+        <FilmCard product="flying" channel="airport" kicker="Airport · local makers" />
+        <FilmCard product="expiring" channel="outlet" kicker="Neighbourhood grocery · near-date stock" />
+      </div>
+
+      {/* Three steps */}
+      <div className="mx-auto mt-8 grid max-w-6xl gap-5 lg:grid-cols-[1.25fr_1fr_1fr]">
+        <StepCard n={1} title="Pick your retail shelf">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Retail channel">
+            {OPPORTUNITIES.map((o) => {
+              const Icon = ICON[o.id]; const on = channel === o.id;
+              const stores = storesFor(st, o.id); const free = stores.reduce((t, x) => t + freeShelves(st, x), 0);
+              return (
+                <button key={o.id} type="button" role="radio" aria-checked={on} onClick={() => setChannel(o.id)} data-testid={`channel-${o.id}`}
+                  className={`flex flex-col items-center gap-1.5 rounded-2xl border-2 px-2 py-3 text-center transition ${on ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                  <Icon className={`h-6 w-6 ${on ? "text-primary" : "text-foreground/70"}`} strokeWidth={1.6} />
+                  <span className="text-xs font-semibold leading-tight">{SHORT[o.id]}</span>
+                  <span className="text-[10px] text-muted-foreground" data-testid={`count-${o.id}`}>{stores.length ? `${free} shelves` : "Coming soon"}</span>
+                </button>
+              );
+            })}
+          </div>
+          <ChannelNote id={channel} st={st} />
+        </StepCard>
+
+        <StepCard n={2} title="Choose product type">
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Product type">
+            {([["standard", "Standard retail", "Your own products at full price", Package], ["near-expiry", "Near-expiry", "Stock close to its date, sold at a discount", Clock]] as const).map(([k, l, h, Icon]) => {
+              const on = type === k;
+              return (
+                <button key={k} type="button" role="radio" aria-checked={on} onClick={() => setType(k)} data-testid={`type-${k}`}
+                  className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-3 py-4 text-center transition ${on ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                  <span className={`relative h-6 w-11 rounded-full transition ${on ? "bg-primary" : "bg-muted"}`}><span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${on ? "left-[22px]" : "left-0.5"}`} /></span>
+                  <Icon className="h-5 w-5 text-foreground/70" strokeWidth={1.6} />
+                  <span className="text-sm font-semibold leading-tight">{l}</span>
+                  <span className="text-[11px] leading-snug text-muted-foreground">{h}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">{type === "near-expiry" ? "Shows stores that accept food and drinks. Products need their expiry date and must not be expired." : "Rent the shelf (monthly rent) or place products on consignment (the store keeps a commission). You choose on the store page."}</p>
+        </StepCard>
+
+        <StepCard n={3} title="Your roadmap">
+          <div className="flex gap-1" aria-hidden="true">
+            {ROADMAP.map((_, i) => <span key={i} className={`h-2.5 flex-1 rounded-full ${i === 0 ? "bg-primary/40" : i === 1 ? "bg-primary" : "bg-muted"}`} />)}
+          </div>
+          <ol className="mt-3 grid grid-cols-3 gap-2 text-center">
+            {ROADMAP.map((r, i) => (
+              <li key={r.t}><p className="text-xs font-bold">{i + 1}. {r.t}</p><p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{r.d}</p></li>
+            ))}
+          </ol>
+          <button type="button" onClick={start} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3.5 font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_hsl(12_72%_52%/.6)] transition hover:-translate-y-0.5" data-testid="button-start-application">
+            Start application <ArrowRight className="h-4 w-4" />
+          </button>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">Timing depends on the store owner and InRaf's review. Nothing is charged until both sides sign.</p>
+        </StepCard>
+      </div>
+
+      <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-sm md:grid-cols-2">
+        <p className="rounded-2xl bg-muted/60 px-5 py-3"><b>Model A · Rent a shelf.</b> <span className="text-muted-foreground">Monthly rent; you manage your own products.</span></p>
+        <p className="rounded-2xl bg-muted/60 px-5 py-3"><b>Model B · Consignment.</b> <span className="text-muted-foreground">No rent; the store sells for you and keeps a commission.</span></p>
+      </div>
+      <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-muted-foreground">Holding an InRaf token doesn't give you a shelf by itself: your rights to a shelf come from the contract you sign with the store.</p>
     </section>
   );
 }
 
-function Tile({ id, size, delay, st }: { id: OpportunityId; size: "hero" | "wide" | "small"; delay: number; st: ReturnType<typeof useStore> }) {
-  const big = size !== "small";
+function StepCard({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * n, duration: 0.35 }}
+      className="flex flex-col rounded-[1.75rem] border border-border bg-card p-6 shadow-[0_24px_60px_-45px_rgba(120,60,30,.5)]" data-testid={`step-${n}`}>
+      <p className="font-display text-xl font-bold">Step {n}: {title}</p>
+      <div className="mt-4 flex-1">{children}</div>
+    </motion.div>
+  );
+}
+
+/** What the picked channel offers right now, from real stores. */
+function ChannelNote({ id, st }: { id: OpportunityId; st: ReturnType<typeof useStore> }) {
   const o = OPPORTUNITIES.find((x) => x.id === id)!;
   const stores = storesFor(st, id);
-  const free = stores.reduce((t, x) => t + freeShelves(st, x), 0);
-  const countries = geography(st, stores).size;
-  const soon = stores.length === 0;
   const samples = stores.filter((x) => x.seeded).length;
-  const href = `/opportunities/${id}`;
-  const { hovered, bind } = useMouseHover();
+  const countries = geography(st, stores).size;
   return (
-    <motion.div {...bind} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay, duration: 0.4 }}
-      className={`group relative flex overflow-hidden rounded-[1.5rem] bg-muted ${size === "hero" ? "flex-col md:col-span-2 md:row-span-2" : size === "wide" ? "flex-col md:col-span-4 md:flex-row" : "flex-col"}`} data-testid={`opportunity-${id}`}>
-      <div className={`relative ${size === "hero" ? "aspect-[16/10] md:aspect-auto md:flex-1" : size === "wide" ? "aspect-[16/10] md:aspect-[16/6] md:w-2/3" : "aspect-[16/10]"}`}>
-        {o.video
-          ? <ProductVideo product={o.video} active={hovered} className="absolute inset-0 h-full w-full" imgClassName="transition duration-500 group-hover:scale-[1.03]"
-              playerExtra={<Link href={href} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">Explore {o.title.toLowerCase()} <ArrowRight className="h-4 w-4" /></Link>} />
-          : <SceneArt venue={o.scene} className="absolute inset-0 h-full w-full transition duration-500 group-hover:scale-105" />}
-        {soon && <span className="absolute right-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-semibold backdrop-blur">Coming soon</span>}
+    <p className="mt-3 text-xs text-muted-foreground" data-testid="channel-note">
+      <b className="text-foreground">{o.title}.</b> {o.text} {stores.length ? `${stores.length} store${stores.length === 1 ? "" : "s"}${samples ? ` (${samples === stores.length ? "samples" : `${samples} sample`})` : ""} in ${countries} countr${countries === 1 ? "y" : "ies"}.` : "First stores coming soon."}
+    </p>
+  );
+}
+
+/** One product film: loops silently, wide; "Watch with sound" opens the full version. */
+function FilmCard({ product, channel, kicker }: { product: ProductId; channel: OpportunityId; kicker: string }) {
+  const j = PRODUCT_JOURNEY[product];
+  const [watch, setWatch] = useState(false);
+  const href = `/opportunities/${channel}`;
+  return (
+    <motion.article initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
+      className="group overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-[0_30px_70px_-50px_rgba(120,60,30,.6)]" data-testid={`film-${product}`}>
+      <div className="relative aspect-video bg-black">
+        <Link href={href} tabIndex={-1} aria-hidden="true" className="absolute inset-0 block"><LoopVideo src={j.video.preview} className="transition duration-700 group-hover:scale-[1.02]" /></Link>
+        <button type="button" onClick={() => setWatch(true)} className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur hover:bg-background" data-testid={`watch-${product}`}>
+          <Volume2 className="h-3.5 w-3.5 text-primary" />Watch with sound
+        </button>
       </div>
-      <Link href={href} className={`flex justify-between gap-3 bg-card p-4 ${size === "wide" ? "items-end md:flex-1 md:items-center md:p-8" : "items-end"} focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ring/30`} data-testid={`link-opportunity-${id}`}>
+      <Link href={href} className="flex items-center justify-between gap-4 p-5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ring/30">
         <span className="min-w-0">
-          <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">{o.tagline}</span>
-          <span className={`font-display block font-bold leading-tight ${big ? "text-2xl" : "text-lg"}`}>{o.title}</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground" data-testid={`count-${id}`}>{soon ? "First stores coming soon" : `${stores.length} store${stores.length === 1 ? "" : "s"}${samples ? ` (${samples === stores.length ? "samples" : `${samples} sample`})` : ""} · ${countries} countr${countries === 1 ? "y" : "ies"} · ${free} shelves free`}</span>
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">{kicker}</span>
+          <span className="font-display block text-2xl font-bold leading-tight">{j.title}</span>
+          <span className="mt-1 block text-sm text-muted-foreground">{j.summary}</span>
         </span>
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
       </Link>
-    </motion.div>
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>{watch && <Player product={product} startAt={0} onClose={() => setWatch(false)}><Link href={href} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">Explore these shelves <ArrowRight className="h-4 w-4" /></Link></Player>}</AnimatePresence>,
+        document.body,
+      )}
+    </motion.article>
   );
 }

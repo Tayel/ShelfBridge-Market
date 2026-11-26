@@ -146,7 +146,7 @@ export function ProductVideo({ product, active, className = "", imgClassName = "
 }
 
 /** The larger viewing area: the full video with sound and controls, over the page. */
-function Player({ product, startAt, onClose, children }: { product: ProductId; startAt: number; onClose: () => void; children?: ReactNode }) {
+export function Player({ product, startAt, onClose, children }: { product: ProductId; startAt: number; onClose: () => void; children?: ReactNode }) {
   const j = PRODUCT_JOURNEY[product];
   const v = useRef<HTMLVideoElement>(null);
   const close = useRef<HTMLButtonElement>(null);

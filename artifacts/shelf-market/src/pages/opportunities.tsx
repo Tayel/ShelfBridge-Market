@@ -23,9 +23,16 @@ export default function Opportunities() {
   if (!o) return <Shell title="Not found" back="/start?as=holder"><p className="mt-20 text-center text-muted-foreground">That opportunity doesn't exist. <Link href="/start?as=holder" className="text-primary underline">See all</Link></p></Shell>;
 
   const country = q.get("country"), city = q.get("city");
-  const stores = storesFor(st, o.id);
+  // "Near-expiry" from the start page: only stores that accept food and drinks, where near-date stock can go.
+  const nearExpiry = q.get("type") === "near-expiry";
+  const stores = storesFor(st, o.id).filter((x) => !nearExpiry || x.categories.some((c) => c === "food" || c === "drinks"));
   const geo = geography(st, stores);
-  const url = (c?: string | null, ci?: string | null) => `/opportunities/${o.id}${c ? `?country=${c}${ci ? `&city=${encodeURIComponent(ci)}` : ""}` : ""}`;
+  const url = (c?: string | null, ci?: string | null) => {
+    const p = new URLSearchParams();
+    if (c) p.set("country", c); if (c && ci) p.set("city", ci); if (nearExpiry) p.set("type", "near-expiry");
+    const s = p.toString();
+    return `/opportunities/${o.id}${s ? `?${s}` : ""}`;
+  };
   const countries = [...new Set([...geo.keys(), ...PRIORITY_COUNTRIES.map((c) => c.code)])];
   const cities = country ? [...(geo.get(country)?.cities.entries() ?? [])] : [];
   const list = stores.filter((x) => (!country || x.country === country) && (!city || x.city === city));
@@ -58,8 +65,12 @@ export default function Opportunities() {
       </nav>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        <Link href={nearExpiry ? url(country, city).replace(/[?&]type=near-expiry/, "").replace(/\?$/, "") : `${url(country, city)}${url(country, city).includes("?") ? "&" : "?"}type=near-expiry`}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${nearExpiry ? "border-foreground bg-foreground text-background" : "border-dashed border-border"}`} data-testid="toggle-near-expiry">
+          {nearExpiry ? "Near-expiry: food & drink stores ✕" : "Near-expiry only"}
+        </Link>
         {OPPORTUNITIES.map((x) => (
-          <Link key={x.id} href={`/opportunities/${x.id}`} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${x.id === o.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary/40"}`}>{x.title}</Link>
+          <Link key={x.id} href={`/opportunities/${x.id}${nearExpiry ? "?type=near-expiry" : ""}`} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${x.id === o.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary/40"}`}>{x.title}</Link>
         ))}
       </div>
 
