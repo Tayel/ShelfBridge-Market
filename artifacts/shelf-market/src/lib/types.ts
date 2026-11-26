@@ -191,6 +191,8 @@ export interface State {
   listings: Listing[]; orders: Order[]; ledger: LedgerEntry[];
   notifications: Notice[]; audit: AuditEntry[];
   saved: string[]; // shop ids on the viewer's wishlist
+  /** Applications from the "I have a shop" journey: space, products and surplus stock offered to InRaf. */
+  requests: OwnerRequest[];
   seq: number;
   offersSeeded?: string; // when the About to Expire / About to Fly samples were added
   airportsSeeded?: string; // when the airport shops for About to Fly Inside were added
@@ -198,3 +200,32 @@ export interface State {
 }
 
 export type Result = { ok: true; id?: string } | { ok: false; error: string };
+
+// ---------- "I have a shop" applications ----------
+export type VenueType = "street" | "mall" | "airport" | "hotel" | "factory" | "supermarket" | "cafe" | "other";
+export type OfferKind = "rent" | "sell" | "surplus";
+/** One display area the owner configured in the interactive scene (a wall shelf, a vitrine, a window...). */
+export interface SpaceArea { id: string; label: string; kind: string; dims: string; units: number; price: number; active: boolean; mode: "rent" | "sell" }
+export interface ProductItem { name: string; category: string; qty: number; price: number }
+export interface SurplusItem {
+  name: string; category: string; qty: number; originalPrice: number; price: number;
+  /** ISO date. Required for food, drinks and beauty; expired stock is refused. */
+  expiry?: string; made?: string;
+  condition: "new" | "packaging" | "seasonal" | "discontinued" | "overstock";
+  storage: "ambient" | "chilled" | "frozen"; handover: "collect" | "deliver" | "both";
+}
+export interface ServiceOffer { id: string; price: number }
+export interface AirportDetails { terminal: string; zone: string; side: "airside" | "landside"; departures: boolean; format: string }
+export interface OwnerRequest {
+  id: string; ref: string; createdAt: string;
+  status: "received" | "in-review" | "accepted" | "declined"; statusNote?: string;
+  /** Live mode: the account that sent it. */
+  userId?: string;
+  venue: VenueType; offers: OfferKind[]; categories: string[]; otherCategory?: string;
+  business: { name: string; type: string; country: string; city: string; address: string; contact: string; phone: string; email: string };
+  spaces: SpaceArea[]; airport?: AirportDetails;
+  products: ProductItem[]; surplus: SurplusItem[]; services: ServiceOffer[];
+  terms: string;
+  /** The shop listing created from it when the owner rents out space. */
+  shopId?: string;
+}

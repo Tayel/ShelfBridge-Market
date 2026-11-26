@@ -165,6 +165,7 @@ export default function Admin() {
         <Tabs value={tab} onChange={setTab} options={[
           { id: "overview", label: "Overview" }, { id: "stores", label: "Stores", count: st.shops.filter((s) => s.status === "pending").length },
           { id: "shelves", label: "Shelves" }, { id: "holders", label: "Holders" }, { id: "contracts", label: "Contracts", count: awaiting.length },
+          { id: "applications", label: "Applications", count: st.requests.filter((r) => r.status === "received").length },
           { id: "finance", label: "Finance", count: refunds }, { id: "audit", label: "Audit" },
         ]} />
       </PageTitle>
@@ -227,6 +228,29 @@ export default function Admin() {
             </Link>
           );
         }))}
+
+        {tab === "applications" && (st.requests.length === 0 ? <Empty title="No applications yet" text="Applications from the “I have a shop” journey appear here." /> : st.requests.slice().reverse().map((r) => (
+          <Card key={r.id} testId={`row-application-${r.id}`}>
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{r.ref} · {r.business.name} <span className="text-xs text-muted-foreground">({r.business.type}, {r.venue})</span></p>
+                <p className="text-xs text-muted-foreground">{r.business.address}, {r.business.city}, {countryName(r.business.country)} · {r.business.contact} · {r.business.phone} · {r.business.email} · {fmtTime(r.createdAt)}</p>
+                <p className="mt-1 text-xs">Offers: <b>{r.offers.join(", ")}</b> · Categories: {[...r.categories, ...(r.otherCategory ? [r.otherCategory] : [])].join(", ")}</p>
+                {r.spaces.some((a) => a.active) && <p className="text-xs">Space: {r.spaces.filter((a) => a.active).map((a) => `${a.label} ${a.units}×${usd(a.price)}`).join(" · ")}{r.airport ? ` · ${[r.airport.terminal && `T ${r.airport.terminal}`, r.airport.zone, r.airport.side, r.airport.departures && "departures", r.airport.format].filter(Boolean).join(", ")}` : ""}</p>}
+                {r.products.length > 0 && <p className="text-xs">Products: {r.products.map((p) => `${p.name} ${p.qty}×${usd(p.price)}`).join(" · ")}</p>}
+                {r.surplus.length > 0 && <p className="text-xs">Surplus: {r.surplus.map((p) => `${p.name} ${p.qty}×${usd(p.price)} (was ${usd(p.originalPrice)}${p.expiry ? `, expires ${p.expiry}` : ""}, ${p.storage}, ${p.handover})`).join(" · ")}</p>}
+                {r.services.length > 0 && <p className="text-xs">Services: {r.services.map((s) => `${s.id} ${usd(s.price)}/mo`).join(" · ")}</p>}
+                {r.terms && <p className="text-xs text-muted-foreground">Terms: {r.terms}</p>}
+                {r.statusNote && <p className="text-xs text-muted-foreground">Note: {r.statusNote}</p>}
+              </div>
+              <Pill testId={`status-application-${r.id}`}>{r.status}</Pill>
+              {r.shopId && <SmallButton onClick={() => setTab("stores")} testId={`button-application-store-${r.id}`}>Store listing</SmallButton>}
+              {r.status !== "in-review" && r.status !== "accepted" && <SmallButton disabled={pending} onClick={() => act(() => actions.decideOwnerRequest(r.id, "in-review", ""), "Marked in review")} testId={`button-review-application-${r.id}`}>In review</SmallButton>}
+              {r.status !== "accepted" && <SmallButton tone="solid" disabled={pending} onClick={() => { const n = window.prompt("Note for the applicant (optional)"); if (n !== null) act(() => actions.decideOwnerRequest(r.id, "accepted", n), "Application accepted"); }} testId={`button-accept-application-${r.id}`}>Accept</SmallButton>}
+              {r.status !== "declined" && <SmallButton tone="danger" disabled={pending} onClick={() => { const n = window.prompt("Reason (shown to the applicant)"); if (n !== null) act(() => actions.decideOwnerRequest(r.id, "declined", n), "Application declined"); }} testId={`button-decline-application-${r.id}`}>Decline</SmallButton>}
+            </div>
+          </Card>
+        )))}
 
         {tab === "finance" && <Finance st={st} />}
 

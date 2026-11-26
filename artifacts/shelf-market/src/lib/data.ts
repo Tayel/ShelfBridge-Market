@@ -1,5 +1,5 @@
 import {
-  Coffee, ShoppingBasket, Pill, BookOpen, Shirt, Flower2, Croissant, Wrench,
+  Coffee, ShoppingBasket, Pill, BookOpen, Shirt, Flower2, Croissant, Wrench, Gift, Plane, BedDouble, Factory,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,6 +15,10 @@ export const BUSINESSES: Business[] = [
   { code: "4771", label: "Clothing", icon: Shirt },
   { code: "4776", label: "Florist", icon: Flower2 },
   { code: "4752", label: "Hardware", icon: Wrench },
+  { code: "4773", label: "Boutique & gifts", icon: Gift },
+  { code: "4719", label: "Airport & travel retail", icon: Plane },
+  { code: "5510", label: "Hotel", icon: BedDouble },
+  { code: "1079", label: "Factory & outlet", icon: Factory },
 ];
 
 /** Priority markets first. Others are kept so earlier demo data stays readable. */

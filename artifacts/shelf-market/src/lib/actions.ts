@@ -34,5 +34,7 @@ export const actions = {
   toggleSaved: (shopId: string) => call("toggleSaved", [shopId], (d) => ops.toggleSaved(d, shopId)),
   reportShop: (shopId: string, reason: string) => call("reportShop", [shopId, reason], (d) => ops.reportShop(d, shopId, reason)),
   markRead: (role: Role, id?: string) => call("markRead", [role, id], (d) => ops.markRead(d, role, id)),
+  submitOwnerRequest: (a: ops.OwnerRequestInput) => call("submitOwnerRequest", [a], (d) => ops.submitOwnerRequest(d, a)),
+  decideOwnerRequest: (id: string, status: "in-review" | "accepted" | "declined", note: string) => call("decideOwnerRequest", [id, status, note], (d) => ops.decideOwnerRequest(d, id, status, note)),
   reset: (): Promise<Result> => Promise.resolve(resetDemo()),
 };

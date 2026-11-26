@@ -55,7 +55,7 @@ export const SEED_HOLDERS: Holder[] = [
 ];
 
 export function emptyState(): State {
-  return { schema: 2, role: "holder", shops: [], tokens: [], holders: [], contracts: [], invoices: [], listings: [], orders: [], ledger: [], notifications: [], audit: [], saved: [], seq: 0 };
+  return { schema: 2, role: "holder", shops: [], tokens: [], holders: [], contracts: [], invoices: [], listings: [], orders: [], ledger: [], notifications: [], audit: [], saved: [], requests: [], seq: 0 };
 }
 
 const fromProduct = (pid: string, origin: string, qty: number, over: { expiry?: string; batch?: string } = {}) => {

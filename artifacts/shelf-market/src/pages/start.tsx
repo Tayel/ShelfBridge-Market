@@ -5,6 +5,7 @@ import { Shell, PrimaryButton, GhostButton } from "@/components/shell";
 import { ProductVideo, useMouseHover } from "@/components/product-video";
 import { HowItWorks, JourneySteps, asset, nextStep, type JourneyRole } from "@/components/product-bits";
 import { PRODUCT_JOURNEY, isProductId, type ProductId } from "@/lib/data";
+import OwnerJourney from "./owner-journey";
 
 const ROLE: Record<JourneyRole, { label: string; ask: string; next: string }> = {
   owner: { label: "Apply as store owner", ask: "Which product will your shelves host?", next: "See what your shelves could earn" },
@@ -17,6 +18,13 @@ const ROLE: Record<JourneyRole, { label: string; ask: string; next: string }> = 
  * "Find a shelf" for token holders.
  */
 export default function Start() {
+  const q = new URLSearchParams(useSearch());
+  // Store owners get the full "I have a shop" journey: where, what, which products, their space, earnings, listing.
+  if (q.get("as") === "owner") return <OwnerJourney />;
+  return <HolderStart />;
+}
+
+function HolderStart() {
   const q = new URLSearchParams(useSearch());
   const [, go] = useLocation();
   const role: JourneyRole = q.get("as") === "owner" ? "owner" : "holder";

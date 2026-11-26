@@ -4,7 +4,7 @@
  * a payment provider, an e-signature service or a bank.
  */
 import type {
-  Contract, ContractSnapshot, ContractVersion, Holder, LedgerEntry, LedgerType, Listing, Order, RentInvoice,
+  Contract, ContractSnapshot, ContractVersion, Holder, LedgerEntry, LedgerType, Listing, Order, OwnerRequest, RentInvoice,
   RentalTerms, Role, Shop, ShopListing, ShopPhoto, State, Token, VersionKind,
 } from "./types";
 import {
@@ -646,4 +646,73 @@ export function reportShop(s: State, shopId: string, reason: string) {
   if (!reason.trim()) fail("Say briefly what's wrong with this listing.");
   audit(s, ROLE_LABEL[s.role], "store.reported", shopId, `${shop.name}: ${reason.trim()}`);
   notify(s, "admin", "Listing reported", `${shop.name}: ${reason.trim()}`, "/admin?tab=stores");
+}
+
+// ---------- "I have a shop" applications ----------
+export const VENUES = ["street", "mall", "airport", "hotel", "factory", "supermarket", "cafe", "other"] as const;
+/** Categories where a best-before or expiry date is required before stock can be offered. */
+export const DATED_CATEGORIES = ["food", "beauty"];
+export const daysLeft = (expiry: string, from = today()) => Math.round((Date.parse(expiry) - Date.parse(from)) / 86400e3);
+/** Minimum remaining shelf life InRaf accepts for near-expiry stock, so it can still be placed and sold safely. */
+export const MIN_SHELF_LIFE_DAYS = 7;
+
+export type OwnerRequestInput = Omit<OwnerRequest, "id" | "ref" | "createdAt" | "status" | "statusNote" | "userId" | "shopId"> & { shop?: ShopInput };
+
+export function submitOwnerRequest(s: State, input: OwnerRequestInput): string {
+  const b = input.business ?? ({} as OwnerRequest["business"]);
+  if (!(VENUES as readonly string[]).includes(input.venue)) fail("Choose where your business is.");
+  const offers = (input.offers ?? []).filter((o) => o === "rent" || o === "sell" || o === "surplus");
+  if (!offers.length) fail("Choose at least one thing to offer: space, products or surplus stock.");
+  if (!input.categories?.length && !input.otherCategory?.trim()) fail("Choose at least one product category.");
+  if (![b.name, b.contact, b.city, b.address].every((x) => typeof x === "string" && x.trim())) fail("Add the business name, contact person, city and address.");
+  if (!/^\+?[0-9 ()-]{7,20}$/.test(b.phone ?? "")) fail("Add a phone or WhatsApp number, with the country code.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email ?? "")) fail("Add a valid email address.");
+
+  const spaces = (input.spaces ?? []).filter((a) => a.active);
+  if (offers.includes("rent")) {
+    if (!spaces.length) fail("Turn on at least one display area to rent out.");
+    if (spaces.some((a) => !(a.units >= 1 && a.units <= 40) || !(a.price > 0 && a.price <= 5000))) fail("Each display area needs 1–40 units and a monthly price above zero.");
+  }
+  if (offers.includes("sell")) {
+    if (!input.products?.length) fail("Add at least one product you want to sell.");
+    if (input.products.some((p) => !p.name?.trim() || !(p.qty > 0) || !(p.price > 0))) fail("Each product needs a name, a quantity and a price.");
+  }
+  const t0 = today();
+  if (offers.includes("surplus")) {
+    if (!input.surplus?.length) fail("Add at least one surplus product.");
+    for (const it of input.surplus) {
+      if (!it.name?.trim() || !(it.qty > 0) || !(it.originalPrice > 0) || !(it.price > 0)) fail("Each surplus product needs a name, quantity, original price and selling price.");
+      if (it.price > it.originalPrice) fail(`${it.name}: the selling price can't be above the original price.`);
+      if (DATED_CATEGORIES.includes(it.category) && !it.expiry) fail(`${it.name}: add the expiry or best-before date.`);
+      if (it.expiry) {
+        const left = daysLeft(it.expiry, t0);
+        if (left < 0) fail(`${it.name} has expired. Expired products can't be offered on InRaf.`);
+        if (left < MIN_SHELF_LIFE_DAYS) fail(`${it.name} has ${left} day${left === 1 ? "" : "s"} left. InRaf needs at least ${MIN_SHELF_LIFE_DAYS} days of shelf life to place it safely.`);
+      }
+      if (it.made && it.expiry && it.made > it.expiry) fail(`${it.name}: the manufacturing date is after the expiry date.`);
+    }
+  }
+  if ((input.services ?? []).some((x) => !(x.price >= 0))) fail("Service prices can't be negative.");
+
+  const id = uid("req");
+  const ref = nextRef(s, "APP");
+  let shopId: string | undefined;
+  if (offers.includes("rent") && input.shop) shopId = createShop(s, input.shop);
+  const { shop: _shop, ...rest } = input;
+  s.requests.push({
+    ...rest, offers, spaces: input.spaces ?? [], products: offers.includes("sell") ? input.products : [], surplus: offers.includes("surplus") ? input.surplus : [],
+    services: input.services ?? [], id, ref, createdAt: nowIso(), status: "received", shopId,
+  });
+  audit(s, ROLE_LABEL.owner, "application.submitted", id, `${ref} ${b.name}: ${offers.join(", ")}`);
+  notify(s, "admin", "New business application", `${b.name} (${b.city}) offers ${offers.map((o) => (o === "rent" ? "space" : o === "sell" ? "products" : "surplus stock")).join(", ")}.`, "/admin?tab=applications");
+  notify(s, "owner", "Application received", `${ref} for ${b.name} is with the InRaf team for review.`, "/owner-dashboard");
+  return id;
+}
+
+export function decideOwnerRequest(s: State, id: string, status: OwnerRequest["status"], note: string) {
+  const r = s.requests.find((x) => x.id === id) ?? fail("Application not found.");
+  if (!["in-review", "accepted", "declined"].includes(status)) fail("Invalid status.");
+  r.status = status; r.statusNote = note || undefined;
+  audit(s, ROLE_LABEL.admin, `application.${status}`, id, `${r.ref}: ${note || "no note"}`);
+  notify(s, "owner", `Application ${status === "in-review" ? "in review" : status}`, `${r.ref} for ${r.business.name}.${note ? ` Note: ${note}` : ""}`, "/owner-dashboard");
 }

@@ -58,6 +58,8 @@ export function Terms() {
           <li>Your listing (photos, size, location, foot traffic, rent) must be accurate. Every new store is reviewed by InRaf before it is shown, and we need your business registration number to approve it.</li>
           <li>You keep each rented shelf installed, safe, clean and accessible during opening hours, and you approve each product before it goes on sale.</li>
           <li>You may refuse products that break the law, your own rules or the contract.</li>
+          <li>If you offer your own products or surplus stock, you confirm they are legal to sell, safe, correctly labelled and stored as their label requires. Expired products are never accepted; products with a date need at least 7 days of shelf life left, and food and beauty products need their expiry or best-before date. Applications are reviewed by InRaf before anything is offered for sale.</li>
+          <li>Earnings shown while you apply are estimates from your own prices, not a promise.</li>
         </ul>
       </Section>
       <Section n={6} title="Makers">
@@ -107,7 +109,7 @@ export function Privacy() {
       <Section n={2} title="What we collect">
         <ul>
           <li><b>Account:</b> your email address and name.</li>
-          <li><b>Store owners and makers:</b> business name, address, registration number, shop or product details and photos.</li>
+          <li><b>Store owners and makers:</b> business name, address, contact person, phone or WhatsApp number, registration number, shop, product and stock details, and photos.</li>
           <li><b>Activity:</b> contracts, signatures (typed names with time), invoices, orders, refunds, notifications and a record of actions taken.</li>
           <li><b>Technical:</b> two cookies that are needed for the site to work — one keeps you signed in, one links an anonymous shopper to their own orders — and the IP address used to request a sign-in link (to stop abuse). No advertising or tracking cookies.</li>
         </ul>

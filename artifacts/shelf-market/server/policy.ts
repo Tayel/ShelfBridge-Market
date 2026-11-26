@@ -42,7 +42,7 @@ function checkSize(args: unknown[]) {
 
 /** The stores, holders and orders an action touched, used to address its notices. */
 function context(s: State, values: unknown[]) {
-  const shops = new Set<string>(), holders = new Set<string>(), orders = new Set<string>();
+  const shops = new Set<string>(), holders = new Set<string>(), orders = new Set<string>(), users = new Set<string>();
   const visit = (v: unknown) => {
     if (typeof v === "string") {
       const shop = s.shops.find((x) => x.id === v); if (shop) shops.add(shop.id);
@@ -52,10 +52,11 @@ function context(s: State, values: unknown[]) {
       const tok = s.tokens.find((x) => x.id === v); if (tok) { shops.add(tok.shopId); holders.add(tok.holderId); }
       const lst = s.listings.find((x) => x.id === v); if (lst) { shops.add(lst.shopId); holders.add(lst.holderId); }
       const ord = s.orders.find((x) => x.id === v); if (ord) { shops.add(ord.shopId); holders.add(ord.holderId); orders.add(ord.id); }
+      const app = s.requests.find((x) => x.id === v); if (app?.userId) users.add(app.userId);
     } else if (v && typeof v === "object") Object.values(v).forEach(visit);
   };
   values.forEach(visit);
-  return { shops, holders, orders };
+  return { shops, holders, orders, users };
 }
 
 function address(s: State, before: Set<string>, touched: unknown[], actor: Actor, actionName: string) {
@@ -64,7 +65,7 @@ function address(s: State, before: Set<string>, touched: unknown[], actor: Actor
   if (suspended) s.tokens.forEach((t) => { if (ctx.shops.has(t.shopId) && !t.released) ctx.holders.add(t.holderId); });
   const recipients = (role: Role): string[] | undefined => {
     if (role === "admin") return undefined; // every admin
-    if (role === "owner") return [...ctx.shops].map((id) => s.shops.find((x) => x.id === id)?.ownerUserId).filter(Boolean).map((u) => `u:${u}`);
+    if (role === "owner") return [...new Set([...[...ctx.shops].map((id) => s.shops.find((x) => x.id === id)?.ownerUserId), ...ctx.users])].filter(Boolean).map((u) => `u:${u}`);
     if (role === "holder") return [...ctx.holders].map(userIdOfHolder).filter(Boolean).map((u) => `u:${u}`);
     return [...ctx.orders].map((id) => s.orders.find((o) => o.id === id)?.buyerId).filter((b): b is string => !!b);
   };
@@ -97,6 +98,18 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       shop.registration = "";
       break;
     }
+    case "submitOwnerRequest": {
+      const m = signedIn(actor);
+      run(() => ops.submitOwnerRequest(s, a0 as ops.OwnerRequestInput));
+      const r = find(s.requests, id!, "Application");
+      r.userId = m.id;
+      if (r.shopId) {
+        const shop = find(s.shops, r.shopId, "Store");
+        shop.ownerUserId = m.id; shop.ownerName = m.name || m.email.split("@")[0]; shop.registration = "";
+      }
+      break;
+    }
+    case "decideOwnerRequest": admin(actor); run(() => ops.decideOwnerRequest(s, str(a0, "application"), args[1] as "in-review" | "accepted" | "declined", String(args[2] ?? ""))); break;
     case "updateShop": canManageShop(s, str(a0, "store"), actor); run(() => ops.updateShop(s, a0 as string, args[1] as Parameters<typeof ops.updateShop>[2])); break;
     case "deleteShop": canManageShop(s, str(a0, "store"), actor); run(() => ops.deleteShop(s, a0 as string)); break;
     case "setShopStatus": {

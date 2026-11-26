@@ -41,12 +41,25 @@ export default function OwnerDashboard() {
         <Tabs value={tab} onChange={setTab} options={[{ id: "todo", label: "To do", count: toSign.length + products.length }, { id: "shelves", label: "Shelves" }, { id: "rent", label: "Rent" }, { id: "stores", label: "Stores", count: expiring.length }]} />
       </PageTitle>
       <div className="mx-auto mt-6 max-w-4xl"><ErrorNote error={error} /></div>
+      {st.requests.length > 0 && (
+        <section className="mx-auto mt-4 max-w-3xl" data-testid="my-applications">
+          <h2 className="font-display text-xl font-bold">Your applications</h2>
+          <div className="mt-3 space-y-2">
+            {st.requests.slice().reverse().map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-3xl border border-border p-4" data-testid={`row-my-application-${r.id}`}>
+                <div className="min-w-0 flex-1"><p className="font-medium">{r.ref} · {r.business.name}</p><p className="text-xs text-muted-foreground">{r.offers.map((o) => (o === "rent" ? "Space" : o === "sell" ? "Products" : "Surplus stock")).join(" · ")} · {fmtDate(r.createdAt.slice(0, 10))}{r.statusNote ? ` · ${r.statusNote}` : ""}</p></div>
+                <Pill>{r.status === "received" ? "with InRaf" : r.status}</Pill>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {shops.length === 0 ? (
         <div className="mt-10 flex flex-col items-center text-center" data-testid="empty-listings">
           <ShelfArt tiers={3} hue={150} fill={[null, null, null]} className="w-48" />
           <p className="mt-4 text-muted-foreground">No store yet.</p>
-          <PrimaryButton className="mt-6" onClick={() => go("/owner")} data-testid="button-list-shop">List your shop</PrimaryButton>
+          <PrimaryButton className="mt-6" onClick={() => go("/start?as=owner")} data-testid="button-list-shop">List your shop</PrimaryButton>
         </div>
       ) : tab === "todo" ? (
         <div className="mx-auto mt-4 max-w-3xl space-y-6">

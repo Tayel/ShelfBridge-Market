@@ -1,5 +1,5 @@
 /** Pure state helpers shared by the browser store and the server: fill missing fields, migrate old saves. */
-import type { Contract, ContractVersion, Listing, Role, Shop, State, Token } from "./types";
+import type { Contract, ContractVersion, Listing, OwnerRequest, Role, Shop, State, Token } from "./types";
 import { YOU_HOLDER, _internal, audit, shopDefaults } from "./ops";
 import { LEGACY_SEEDS, SEED_HOLDERS, SEED_SHOPS, emptyState, seedState } from "./seed";
 import { PRODUCTS } from "./data";
@@ -28,6 +28,7 @@ export function normalize(raw: Partial<State>): State {
     notifications: arr(raw.notifications),
     audit: arr(raw.audit),
     saved: arr<string>(raw.saved).filter((x) => typeof x === "string"),
+    requests: arr<OwnerRequest>(raw.requests).filter((r) => r && r.id),
     seq: typeof raw.seq === "number" ? raw.seq : 0,
     migratedFromV1: raw.migratedFromV1,
     offersSeeded: raw.offersSeeded,
