@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/legal";
 import { type ReactNode, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -145,6 +146,12 @@ export function Shell({ children, title, back, wide }: { children: ReactNode; ti
         {" · "}<Link href="/about" className="underline" data-testid="link-footer-about">About & contact</Link>
         {" · "}<Link href="/terms" className="underline" data-testid="link-footer-terms">Terms</Link>
         {" · "}<Link href="/privacy" className="underline" data-testid="link-footer-privacy">Privacy</Link>
+        {live && <>{" · "}<Link href="/privacy/data-rights" className="underline" data-testid="link-footer-data-rights">Your data rights</Link></>}
+        {live && <p className="mx-auto mt-3 max-w-3xl" data-testid="footer-identity">
+          InRaf is operated by {COMPANY.operator}{COMPANY.registeredIn ? `, registered in ${COMPANY.registeredIn}` : ""}{COMPANY.address ? `, ${COMPANY.address}` : ""}.
+          {COMPANY.registration ? ` ${COMPANY.registration}.` : ""}{COMPANY.activities ? ` Activities: ${COMPANY.activities}.` : ""}
+          {" "}A shelf token is a record of your shelf contract: it is not money, not crypto and not an investment, and it gives no share of InRaf's profits.
+        </p>}
       </footer>
     </div>
   );

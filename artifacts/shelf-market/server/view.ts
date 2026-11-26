@@ -4,10 +4,13 @@
  * people involved; the audit log only to the InRaf team.
  */
 import type { State } from "../src/lib/types";
-import type { Me } from "./auth";
+import { type Me, userIdOfHolder } from "./auth";
 
-export function viewFor(s: State, me: Me | null, principal: string, saved: string[]): State {
+export function viewFor(s: State, me: Me | null, principal: string, saved: string[], frozen: Set<string> = new Set()): State {
   if (me?.isAdmin) return { ...s, saved };
+  // Products of a frozen account stop showing to everyone else; the account itself sees no change.
+  const frozenHolder = (holderId: string) => { const u = userIdOfHolder(holderId); return !!u && frozen.has(u); };
+  const frozenShop = (shopId: string) => { const u = s.shops.find((x) => x.id === shopId)?.ownerUserId; return !!u && frozen.has(u); };
   const mine = new Set([principal, ...(me ? [`u:${me.id}`] : [])]);
   const myShops = new Set(s.shops.filter((x) => me && x.ownerUserId === me.id).map((x) => x.id));
   const myHolder = me?.holderId ?? "\u0000";
@@ -27,7 +30,7 @@ export function viewFor(s: State, me: Me | null, principal: string, saved: strin
       .map((t) => (party(t.shopId, t.holderId) ? t : { ...t, revenue: 0, sales: [], stockCost: undefined })),
     contracts,
     invoices: s.invoices.filter((i) => contractIds.has(i.contractId)),
-    listings: s.listings.filter((l) => visibleShops.has(l.shopId) && (l.status === "active" || party(l.shopId, l.holderId))),
+    listings: s.listings.filter((l) => visibleShops.has(l.shopId) && (party(l.shopId, l.holderId) || (l.status === "active" && !frozenHolder(l.holderId) && !frozenShop(l.shopId)))),
     // Stores and makers see their orders, but never which visitor or account placed them.
     orders: s.orders.filter((o) => party(o.shopId, o.holderId) || (o.buyerId && mine.has(o.buyerId)))
       .map((o) => (o.buyerId && mine.has(o.buyerId) ? o : { ...o, buyerId: undefined })),

@@ -9,6 +9,7 @@ import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { caseIsOpen, holderOf } from "@/lib/ops";
 import { CaseCard } from "@/components/store-ops";
+import { DataRequestsPanel, FreezePanel } from "@/components/admin-compliance";
 import {
   awaitingVersion, contractStatus, executedVersion, expiresSoon, holderMoney, invoiceStatus, isLowStock, reconcile, shelfBlockReason, shelfLabel, slotsOf,
 } from "@/lib/selectors";
@@ -168,7 +169,9 @@ export default function Admin() {
           { id: "shelves", label: "Shelves" }, { id: "holders", label: "Holders" }, { id: "contracts", label: "Contracts", count: awaiting.length },
           { id: "operations", label: "Operations", count: st.cases.filter((c) => c.status === "escalated" || (c.kind === "incident" && caseIsOpen(c))).length },
           { id: "applications", label: "Applications", count: st.requests.filter((r) => r.status === "received").length },
-          { id: "finance", label: "Finance", count: refunds }, { id: "audit", label: "Audit" },
+          { id: "finance", label: "Finance", count: refunds },
+          ...(LIVE ? [{ id: "data-requests", label: "Data requests" }, { id: "freezes", label: "Freezes" }] : []),
+          { id: "audit", label: "Audit" },
         ]} />
       </PageTitle>
       <div className="mx-auto mt-6 max-w-6xl space-y-4">
@@ -262,6 +265,8 @@ export default function Admin() {
         )))}
 
         {tab === "finance" && <Finance st={st} />}
+        {LIVE && tab === "data-requests" && <DataRequestsPanel />}
+        {LIVE && tab === "freezes" && <FreezePanel />}
 
         {tab === "audit" && (
           <Card className="overflow-x-auto p-0">

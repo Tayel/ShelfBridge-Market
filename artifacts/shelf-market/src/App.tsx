@@ -25,6 +25,7 @@ import Offers from '@/pages/offers';
 import Start from '@/pages/start';
 import Opportunities from "./pages/opportunities";
 import Support from '@/pages/support';
+import DataRights from '@/pages/data-rights';
 import Host from '@/pages/host';
 import Saved from '@/pages/saved';
 import SignIn from '@/pages/signin';
@@ -72,6 +73,7 @@ function Router() {
         <Route path="/support" component={Support} />
         <Route path="/signin" component={SignIn} />
         <Route path="/terms" component={Terms} />
+        <Route path="/privacy/data-rights" component={DataRights} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/about" component={About} />
         <Route component={NotFound} />

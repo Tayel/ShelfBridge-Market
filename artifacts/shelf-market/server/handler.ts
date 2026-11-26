@@ -10,17 +10,25 @@
  *   POST /api/me/name                 { name }
  *   GET  /api/state                   the marketplace as this person may see it
  *   POST /api/actions/:name           { args: [...] } → applies one action, returns the new view
+ *   POST /api/privacy/requests        { kind, name, email, details, confirm } → a data rights request (DSR-…)
+ *   GET  /api/privacy/requests        the signed-in person's own data rights requests
+ *   GET  /api/admin/data-requests     every data rights request (InRaf team)
+ *   POST /api/admin/data-requests/:id { status?, note?, extend? }
+ *   GET  /api/admin/accounts          accounts and freezes (InRaf team)
+ *   POST /api/admin/freeze            { userId, on, reason } → silent MLRO freeze; nothing is sent to the account
  *   GET  /api/compliance/feed         the full compliance feed for the In-Raf FinCrime OS (server to server,
  *                                     Authorization: Bearer $COMPLIANCE_FEED_TOKEN)
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { buildComplianceFeed } from "../src/lib/feed";
+import * as ops from "../src/lib/ops";
 import { DemoError } from "../src/lib/ops";
 import { HttpError, changeState, databaseUrl, logAction, q, readState } from "./db";
 import { type Me, appOrigin, currentUser, logout, requestLink, updateName, verifyLink, visitorId } from "./auth";
 import { type Actor, applyAction, ensureHolder } from "./policy";
 import { viewFor } from "./view";
+import { ALLOWED_WHILE_FROZEN, NEUTRAL_REFUSAL, frozenUserIds, listAccounts, listDataRequests, myDataRequests, setFreeze, submitDataRequest, updateDataRequest } from "./compliance";
 
 type Req = IncomingMessage & { body?: unknown };
 
@@ -87,6 +95,26 @@ export default async function handler(req: Req, res: ServerResponse) {
     const principalVisitor = visitorId(req, res);
     const me = await currentUser(req);
     const actor: Actor = { me, principal: me ? `u:${me.id}` : `v:${principalVisitor}` };
+    const isAdmin = () => { if (!me) throw new HttpError(401, "Sign in to continue.", "auth"); if (!me.isAdmin) throw new HttpError(403, "Only the InRaf team can do that."); return me; };
+
+    // ---------- data rights and MLRO freezes (kept outside the shared marketplace data) ----------
+    if (path === "/api/privacy/requests" && method === "POST") { checkWrite(req); return send(res, 200, await submitDataRequest(req, me, await readBody(req))); }
+    if (path === "/api/privacy/requests" && method === "GET") return send(res, 200, { ok: true, requests: me ? await myDataRequests(me) : [] });
+    if (path === "/api/admin/data-requests" && method === "GET") { isAdmin(); return send(res, 200, { ok: true, requests: await listDataRequests() }); }
+    const dr = path.match(/^\/api\/admin\/data-requests\/(\d+)$/);
+    if (dr && method === "POST") { checkWrite(req); const m = isAdmin(); return send(res, 200, { ok: true, request: await updateDataRequest(m, dr[1], await readBody(req)) }); }
+    if (path === "/api/admin/accounts" && method === "GET") { isAdmin(); return send(res, 200, { ok: true, accounts: await listAccounts() }); }
+    if (path === "/api/admin/freeze" && method === "POST") {
+      checkWrite(req);
+      const m = isAdmin();
+      const b = await readBody(req);
+      const on = b.on === true;
+      const r = await setFreeze(m, String(b.userId ?? ""), on, String(b.reason ?? ""));
+      // Recorded in the audit log (only the InRaf team sees it). No notice to anyone.
+      await changeState((s) => { ops.audit(s, `Platform admin · ${m.email}`, on ? "account.frozen" : "account.unfrozen", r.email, r.reason); });
+      await logAction(m.email, on ? "freezeAccount" : "unfreezeAccount", true);
+      return send(res, 200, { ok: true });
+    }
 
     if (path === "/api/me" && method === "GET") return send(res, 200, { me: meJson(me) });
     if (path === "/api/auth/request" && method === "POST") { checkWrite(req); return send(res, 200, await requestLink(req, await readBody(req))); }
@@ -99,26 +127,32 @@ export default async function handler(req: Req, res: ServerResponse) {
       return send(res, 200, { me: meJson({ ...me, name }) });
     }
     if (path === "/api/state" && method === "GET") {
-      const [s, saved] = await Promise.all([readState(), savedOf(me)]);
-      return send(res, 200, { me: meJson(me), state: viewFor(s, me, actor.principal, saved) });
+      const [s, saved, frozen] = await Promise.all([readState(), savedOf(me), frozenUserIds()]);
+      return send(res, 200, { me: meJson(me), state: viewFor(s, me, actor.principal, saved, frozen) });
     }
     const m = path.match(/^\/api\/actions\/([A-Za-z]+)$/);
     if (m && method === "POST") {
       checkWrite(req);
       const name = m[1];
       const body = await readBody(req);
+      const frozen = await frozenUserIds();
+      actor.frozen = frozen;
+      if (me && frozen.has(me.id) && !ALLOWED_WHILE_FROZEN.has(name)) {
+        await logAction(me.email, name, false, "account frozen");
+        return send(res, 200, { ok: false, error: NEUTRAL_REFUSAL });
+      }
       if (name === "toggleSaved") {
         if (!me) throw new HttpError(401, "Sign in to save stores.", "auth");
         const shopId = String((body.args as unknown[])?.[0] ?? "");
         const del = await q("delete from saved_shops where user_id = $1 and shop_id = $2", [me.id, shopId]);
         if (!del.rowCount) await q("insert into saved_shops (user_id, shop_id) values ($1, $2) on conflict do nothing", [me.id, shopId]);
         const [s, saved] = await Promise.all([readState(), savedOf(me)]);
-        return send(res, 200, { ok: true, state: viewFor(s, me, actor.principal, saved) });
+        return send(res, 200, { ok: true, state: viewFor(s, me, actor.principal, saved, frozen) });
       }
       try {
         const { result, state } = await changeState((s) => { if (me) ensureHolder(s, me); return applyAction(s, name, body.args, actor); });
         await logAction(me?.email ?? actor.principal, name, true);
-        return send(res, 200, { ok: true, id: result, state: viewFor(state, me, actor.principal, await savedOf(me)) });
+        return send(res, 200, { ok: true, id: result, state: viewFor(state, me, actor.principal, await savedOf(me), frozen) });
       } catch (e) {
         if (e instanceof DemoError) { await logAction(me?.email ?? actor.principal, name, false, e.message); return send(res, 200, { ok: false, error: e.message }); }
         throw e;

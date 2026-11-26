@@ -8,6 +8,11 @@ export const COMPANY = {
   operator: "Qistas Chain",
   registeredIn: "",
   address: "",
+  /** The registration line exactly as it should appear in the footer, e.g. the registry, licence or commercial
+   *  registration number. Left blank until confirmed: nothing is shown rather than a made-up number. */
+  registration: "",
+  /** Licensed or registered activities, as stated in the licence. Blank until confirmed. */
+  activities: "",
   email: "tayel@qistaschain.com",
   whatsapp: "",
 };

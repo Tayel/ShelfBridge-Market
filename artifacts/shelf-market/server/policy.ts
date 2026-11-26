@@ -9,7 +9,7 @@ import type { Holder, Role, State } from "../src/lib/types";
 import { HttpError } from "./db";
 import { type Me, userIdOfHolder } from "./auth";
 
-export interface Actor { me: Me | null; /** `u:<account>` when signed in, else `v:<visitor>` */ principal: string }
+export interface Actor { me: Me | null; /** `u:<account>` when signed in, else `v:<visitor>` */ principal: string; /** accounts the MLRO has frozen */ frozen?: Set<string> }
 
 const need = (cond: unknown, msg = "You can't do that with this account.") => { if (!cond) throw new HttpError(403, msg); };
 const signedIn = (a: Actor): Me => { if (!a.me) throw new HttpError(401, "Sign in to continue.", "auth"); return a.me; };
@@ -248,6 +248,9 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
 
     // ---------- shopping (payments are simulated) ----------
     case "authorize": {
+      const l = find(s.listings, str(a0, "product"), "Product");
+      const holderUser = userIdOfHolder(l.holderId), ownerUser = s.shops.find((x) => x.id === l.shopId)?.ownerUserId;
+      if ((holderUser && actor.frozen?.has(holderUser)) || (ownerUser && actor.frozen?.has(ownerUser))) throw new ops.DemoError("This product isn't available right now.");
       run(() => ops.authorize(s, str(a0, "product"), Number(args[1]), !!args[2]));
       find(s.orders, id!, "Order").buyerId = actor.principal;
       break;
@@ -268,7 +271,14 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       run(() => ops.requestPayout(s, o.id, role));
       break;
     }
-    case "confirmPayout": admin(actor); run(() => ops.confirmPayout(s, str(a0, "order"), !!args[1])); break;
+    case "confirmPayout": {
+      admin(actor);
+      const o = find(s.orders, str(a0, "order"), "Order");
+      const u = userIdOfHolder(o.holderId);
+      if (args[1] && u && actor.frozen?.has(u)) throw new ops.DemoError("Payout held: this maker's account is frozen for compliance. Lift the freeze first.");
+      run(() => ops.confirmPayout(s, o.id, !!args[1]));
+      break;
+    }
 
     // ---------- per-account ----------
     case "markRead": {

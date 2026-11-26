@@ -103,6 +103,11 @@ let loadError: string | null = null;
 let everLoaded = false; // after the first good load, a failed refresh keeps showing the last copy
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/** Plain JSON call to the InRaf API (for endpoints outside the shared marketplace data). */
+export async function apiRequest<T>(path: string, body?: unknown): Promise<T & { ok?: boolean; error?: string; code?: string }> {
+  return api<T>(path, body === undefined ? undefined : { method: "POST", body: JSON.stringify(body) });
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T & { ok?: boolean; error?: string; code?: string }> {
   const r = await fetch(`${base}/api${path}`, { credentials: "same-origin", ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
   const body = await r.json().catch(() => ({ ok: false, error: `The server answered ${r.status}.` }));

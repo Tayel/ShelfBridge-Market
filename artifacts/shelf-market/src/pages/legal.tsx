@@ -136,7 +136,7 @@ export function Privacy() {
         <p>Account data while your account is open. Contracts, invoices and order records for as long as tax and commercial law require in the relevant country. Sign-in links expire after 15 minutes; sessions after 30 days.</p>
       </Section>
       <Section n={6} title="Your rights">
-        <p>You can ask to access, correct or delete your data, to receive a copy, or to object to or restrict how we use it, by writing to <Mailto />. Some records we must keep by law.</p>
+        <p>You can ask to access, correct or delete your data, to receive a copy, or to object to or restrict how we use it. Use the <Link href="/privacy/data-rights" className="text-primary underline">data rights form</Link> (you get a reference and the date we will answer by) or write to <Mailto />. We answer within one month; if a request is complex we may extend this once and will tell you why. Some records we must keep by law.</p>
         <p>You can also complain to your data protection authority: in the UAE the UAE Data Office, in Egypt the Personal Data Protection Center, in Türkiye the Personal Data Protection Authority (KVKK), in Hungary the NAIH, and in Portugal the CNPD.</p>
       </Section>
       <Section n={7} title="Children">
