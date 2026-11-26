@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, CalendarClock, Check, Clock, Package, Plane, Recycle, Shirt, ShoppingBag, Store, Volume2, type LucideIcon } from "lucide-react";
+import { ArrowRight, CalendarClock, Check, Clock, Package, Play, Plane, Recycle, Shirt, ShoppingBag, Store, Volume2, type LucideIcon } from "lucide-react";
 import { Player } from "@/components/product-video";
 import { LoopVideo } from "@/components/loop-video";
 import { PRODUCT_JOURNEY, type ProductId } from "@/lib/data";
@@ -54,8 +54,8 @@ export function HolderDiscovery() {
 
       {/* The two product films, side by side */}
       <div className="mx-auto mt-10 grid max-w-6xl gap-5 md:grid-cols-2" data-testid="holder-videos">
-        <FilmCard product="flying" channel="airport" kicker="Airport · local makers" />
-        <FilmCard product="expiring" channel="outlet" kicker="Neighbourhood grocery · near-date stock" />
+        <FilmCard product="flying" kicker="Airport · local makers" />
+        <FilmCard product="expiring" kicker="Neighbourhood grocery · near-date stock" />
       </div>
 
       {/* Three steps */}
@@ -144,30 +144,32 @@ function ChannelNote({ id, st }: { id: OpportunityId; st: ReturnType<typeof useS
   );
 }
 
-/** One product film: loops silently, wide; "Watch with sound" opens the full version. */
-function FilmCard({ product, channel, kicker }: { product: ProductId; channel: OpportunityId; kicker: string }) {
+/** One product film: loops silently, wide. Clicking anywhere on the card opens the full film with sound; it doesn't
+ *  navigate — the journey starts from "Start application". */
+function FilmCard({ product, kicker }: { product: ProductId; kicker: string }) {
   const j = PRODUCT_JOURNEY[product];
   const [watch, setWatch] = useState(false);
-  const href = `/opportunities/${channel}`;
   return (
     <motion.article initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
       className="group overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-[0_30px_70px_-50px_rgba(120,60,30,.6)]" data-testid={`film-${product}`}>
-      <div className="relative aspect-video bg-black">
-        <Link href={href} tabIndex={-1} aria-hidden="true" className="absolute inset-0 block"><LoopVideo src={j.video.preview} className="transition duration-700 group-hover:scale-[1.02]" /></Link>
-        <button type="button" onClick={() => setWatch(true)} className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur hover:bg-background" data-testid={`watch-${product}`}>
-          <Volume2 className="h-3.5 w-3.5 text-primary" />Watch with sound
-        </button>
-      </div>
-      <Link href={href} className="flex items-center justify-between gap-4 p-5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ring/30">
-        <span className="min-w-0">
-          <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">{kicker}</span>
-          <span className="font-display block text-2xl font-bold leading-tight">{j.title}</span>
-          <span className="mt-1 block text-sm text-muted-foreground">{j.summary}</span>
+      <button type="button" onClick={() => setWatch(true)} aria-label={`Watch the ${j.title} film with sound`} className="block w-full text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ring/30" data-testid={`watch-${product}`}>
+        <div className="relative aspect-video bg-black">
+          <LoopVideo src={j.video.preview} className="transition duration-700 group-hover:scale-[1.02]" />
+          <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur group-hover:bg-background">
+            <Volume2 className="h-3.5 w-3.5 text-primary" />Watch with sound
+          </span>
+        </div>
+        <span className="flex items-center justify-between gap-4 p-5">
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">{kicker}</span>
+            <span className="font-display block text-2xl font-bold leading-tight">{j.title}</span>
+            <span className="mt-1 block text-sm text-muted-foreground">{j.summary}</span>
+          </span>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition group-hover:scale-105"><Play className="h-4 w-4 fill-current" /></span>
         </span>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
-      </Link>
+      </button>
       {typeof document !== "undefined" && createPortal(
-        <AnimatePresence>{watch && <Player product={product} startAt={0} onClose={() => setWatch(false)}><Link href={href} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">Explore these shelves <ArrowRight className="h-4 w-4" /></Link></Player>}</AnimatePresence>,
+        <AnimatePresence>{watch && <Player product={product} startAt={0} onClose={() => setWatch(false)} />}</AnimatePresence>,
         document.body,
       )}
     </motion.article>
