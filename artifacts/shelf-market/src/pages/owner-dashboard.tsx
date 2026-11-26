@@ -11,7 +11,7 @@ import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { holderOf } from "@/lib/ops";
 import { CaseCard, DeliveryCard } from "@/components/store-ops";
-import { caseIsOpen } from "@/lib/ops";
+import { offerExpired, offerNeeded, caseIsOpen } from "@/lib/ops";
 import { awaitingVersion, contractStatus, executedVersion, expiresSoon, invoiceStatus, isExpired, isLowStock, lateFeeFor, shelfLabel, shopShareMoney, slotsOf } from "@/lib/selectors";
 import { daysUntil, downloadBlob, fmtDate, round2, toCsv, today } from "@/lib/util";
 import type { Contract, Order, Shop, State } from "@/lib/types";
@@ -124,7 +124,7 @@ function useDerived(st: State, shops: Shop[]) {
     const ids = new Set(shops.map((s) => s.id));
     const shopOf = (id: string) => shops.find((s) => s.id === id);
     const contracts = st.contracts.filter((c) => ids.has(c.shopId));
-    const awaiting = contracts.filter((c) => { const v = awaitingVersion(c); return v && !c.terminatedAt && !v.ownerSig; });
+    const awaiting = contracts.filter((c) => { const v = awaitingVersion(c); return v && !c.terminatedAt && (offerNeeded(v)); });
     const active = contracts.filter((c) => contractStatus(c) === "active");
     const renewals = active.filter((c) => daysUntil(executedVersion(c)!.snapshot.terms.end) <= 30);
     const tokens = st.tokens.filter((t) => ids.has(t.shopId) && !t.released);
@@ -157,7 +157,7 @@ function useDerived(st: State, shops: Shop[]) {
       ...awaiting.map((c) => {
         const v = awaitingVersion(c)!; const last = c.offers?.at(-1); const s = shopOf(c.shopId);
         const offer = c.model === "consignment" ? `consignment at ${v.snapshot.terms.salesSharePct}% commission` : s && v.snapshot.terms.monthlyRent !== s.price ? `an offer of ${usd(v.snapshot.terms.monthlyRent)}/mo (listed ${usd(s.price)})` : "a rental at your listed price";
-        return { text: `${holderOf(st, c.holderId).name} wants ${v.snapshot.shelf.label}: ${offer}${last?.by === "owner" ? " — waiting for their reply" : ""}`, tab: "overview" as Tab, href: `/contracts/${c.id}`, tone: "warn" as const };
+        return { text: `${holderOf(st, c.holderId).name} wants ${v.snapshot.shelf.label}: ${offer}${last?.by === "owner" ? " — waiting for their reply" : offerExpired(v) ? " — your offer expired: issue it again" : " — issue your formal offer"}`, tab: "overview" as Tab, href: `/contracts/${c.id}`, tone: "warn" as const };
       }),
       ...pendingProducts.map((l) => ({ text: `Approve or reject ${l.initialQty} × ${l.name} from ${holderOf(st, l.holderId).name}`, tab: "products" as Tab, tone: "warn" as const })),
       ...expiredOnShelf.map((l) => ({ text: `${l.name} is past its expiry date (${fmtDate(l.expiry!)}) with ${l.available} on the shelf`, tab: "products" as Tab, tone: "bad" as const })),

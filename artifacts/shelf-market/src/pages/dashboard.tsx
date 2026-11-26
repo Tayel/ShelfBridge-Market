@@ -13,7 +13,8 @@ import { categoryLabel, countryName } from "@/lib/data";
 import { useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
-import { caseIsOpen, holderOf } from "@/lib/ops";
+import { caseIsOpen, holderOf, offerExpired, offerNeeded } from "@/lib/ops";
+import { longDate } from "@/lib/agreement";
 import {
   contractOfToken, contractStatus, executedVersion, awaitingVersion, expiresSoon, holderMoney, invoiceStatus, isExpired, isLowStock, lateFeeFor,
   reservedQty, shelfBlockReason, shelfLabel, shelfUnits,
@@ -142,7 +143,7 @@ function useBusiness(st: State, holderId: string) {
 
     const attention: { text: string; go: Sec; href?: string; tone: "warn" | "bad" }[] = [
       ...overdue.map((i) => ({ text: `Rent overdue: ${i.label} (${usd(i.total + lateFeeFor(st, i))})`, go: "money" as Sec, tone: "bad" as const })),
-      ...pendingSign.map((c) => ({ text: `${c.ref} is waiting for ${awaitingVersion(c)!.adminApproval ? "your signature" : "InRaf's check"}`, go: "contracts" as Sec, href: `/contracts/${c.id}`, tone: "warn" as const })),
+      ...pendingSign.map((c) => { const v = awaitingVersion(c)!; return { text: offerNeeded(v) ? `${c.ref} is waiting for the store owner's formal offer` : !v.adminApproval ? `${c.ref}: offer ${v.offer?.no ?? ""} received, InRaf is reviewing it` : `${c.ref}: accept offer ${v.offer?.no ?? ""} by ${longDate(v.offer?.validUntil)}`, go: "contracts" as Sec, href: `/contracts/${c.id}`, tone: "warn" as const }; }),
       ...cases.filter((c) => c.status === "awaiting-verification").map((c) => ({ text: `${c.ref} (${caseLabel(c)}): the store says it's done — check the evidence`, go: "requests" as Sec, tone: "warn" as const })),
       ...openIncidents.map((c) => ({ text: `Open incident ${c.ref}: ${caseLabel(c)}`, go: "requests" as Sec, tone: "bad" as const })),
       ...expired.map((l) => ({ text: `${l.name} is past its expiry date with ${l.available} on the shelf`, go: "products" as Sec, tone: "bad" as const })),
@@ -247,7 +248,7 @@ function ActivityFeed({ st, d, go }: { st: State; d: B; go: (s: Sec) => void }) 
     ...d.deliveries.map((x) => ({ at: x.receivedAt ?? x.createdAt, text: `${x.ref} ${x.status === "expected" ? "registered" : x.status === "cancelled" ? "cancelled" : "received by the store"}`, go: "deliveries" as Sec, icon: Truck })),
     ...d.cases.flatMap((c) => c.events.map((e) => ({ at: e.at, text: `${c.ref} ${caseLabel(c)}: ${e.action} by ${e.byName}`, go: "requests" as Sec, icon: ClipboardList }))),
     ...st.ledger.filter((e) => e.holderId === d.holderId && ["rent_paid", "deposit_paid", "payout_settled", "payout_failed"].includes(e.type)).map((e) => ({ at: e.at, text: `${e.type === "rent_paid" ? "Rent paid" : e.type === "deposit_paid" ? "Deposit paid" : e.type === "payout_settled" ? "Payout settled" : "Payout failed"}: ${usd(Math.abs(e.amount))}`, go: "money" as Sec, icon: Wallet })),
-    ...d.contracts.flatMap((c) => c.versions.filter((v) => v.holderSig).map((v) => ({ at: v.holderSig!.at, text: `${c.ref} v${v.v} signed`, go: "contracts" as Sec, href: `/contracts/${c.id}`, icon: FileText }))),
+    ...d.contracts.flatMap((c) => c.versions.filter((v) => v.holderSig).map((v) => ({ at: v.holderSig!.at, text: `${c.ref} v${v.v}: offer accepted`, go: "contracts" as Sec, href: `/contracts/${c.id}`, icon: FileText }))),
   ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20);
   return (
     <Card testId="card-activity">
@@ -561,7 +562,7 @@ function Contracts({ st, d }: { st: State; d: B }) {
             <div className="flex flex-wrap items-center gap-3">
               <div className="min-w-0 flex-1"><p className="font-medium">{c.ref} · {s?.name} · {v.snapshot.shelf.label}</p>
                 <p className="text-xs text-muted-foreground">v{v.v} {v.kind} · {c.model === "consignment" ? "consignment" : "shelf rental"} · {fmtDate(v.snapshot.terms.start)} → {fmtDate(v.snapshot.terms.end)} · {c.model === "consignment" ? `${v.snapshot.terms.salesSharePct}% commission` : `${usd(v.snapshot.terms.monthlyRent)}/mo`} · deposit {usd(v.snapshot.terms.deposit)} · {v.snapshot.terms.noticeDays ?? 30} days' notice</p></div>
-              {aw && <Pill tone="warn">{!aw.adminApproval ? "InRaf check" : !aw.holderSig ? "your signature" : !aw.ownerSig ? "owner to sign" : "ready"}</Pill>}
+              {aw && <Pill tone="warn">{offerNeeded(aw) ? "owner's offer to come" : !aw.adminApproval ? "InRaf check" : !aw.holderSig ? "offer to accept" : "ready"}</Pill>}
               {cs === "active" && daysUntil(v.snapshot.terms.end) <= 30 && <Pill tone="warn">ends in {daysUntil(v.snapshot.terms.end)} days</Pill>}
               <Pill>{cs}</Pill>
             </div>

@@ -13,7 +13,7 @@ export const actions = {
   counterOffer: (id: string, by: "holder" | "owner", a: Parameters<typeof ops.counterOffer>[3]) => call("counterOffer", [id, by, a], (d) => ops.counterOffer(d, id, by, a)),
   approveContract: (id: string, name: string) => call("approveContract", [id, name], (d) => ops.approveContract(d, id, name)),
   rejectVersion: (id: string, reason: string) => call("rejectVersion", [id, reason], (d) => ops.rejectVersion(d, id, reason)),
-  sign: (id: string, party: "owner" | "holder", name: string, simulated: boolean) => call("sign", [id, party, name, simulated], (d) => ops.signContract(d, id, party, name, simulated ? "simulated" : "ui")),
+  sign: (id: string, party: "owner" | "holder", name: string, simulated: boolean, opts: { validDays?: number; fingerprint?: string } = {}) => call("sign", [id, party, name, simulated, opts], (d) => ops.signContract(d, id, party, name, simulated ? "simulated" : "ui", opts)),
   newVersion: (id: string, kind: "renewal" | "amendment", a: { months: number; monthlyRent: number; note: string }, actor: Role) => call("newVersion", [id, kind, a, actor], (d) => ops.newVersion(d, id, kind, a, actor)),
   terminate: (id: string, reason: string, actor: Role) => call("terminate", [id, reason, actor], (d) => ops.terminateContract(d, id, reason, actor)),
   payInvoice: (id: string) => call("payInvoice", [id], (d) => ops.payInvoice(d, id)),

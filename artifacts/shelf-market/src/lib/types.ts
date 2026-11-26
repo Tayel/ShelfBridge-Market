@@ -112,8 +112,14 @@ export interface ContractVersion {
   v: number; kind: VersionKind; createdAt: string; note?: string;
   snapshot: ContractSnapshot;
   adminApproval?: Signature;
+  /** The Shop Owner's signature: issuing the formal rental offer for this version. */
   ownerSig?: Signature;
+  /** The Token Holder's signature: accepting the offer. */
   holderSig?: Signature;
+  /** The formal offer the Shop Owner issued to the Token Holder (absent on older versions). */
+  offer?: { no: string; issuedAt: string; validUntil: string; fingerprint: string };
+  /** The Token Holder's acceptance, and when both sides were sent their confirmation. */
+  acceptance?: { name: string; at: string; fingerprint: string; confirmedAt?: string };
   status: VersionStatus;
 }
 

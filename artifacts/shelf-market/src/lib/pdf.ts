@@ -1,16 +1,18 @@
 import { jsPDF } from "jspdf";
 import type { AuditEntry, Contract, ContractVersion } from "./types";
-import { categoryLabel, countryName } from "./data";
+import { countryName } from "./data";
+import { buildAgreement, longDate } from "./agreement";
 
 const LIVE = import.meta.env.VITE_BACKEND === "api";
 
-/** Generates a real PDF file marked as a non-legal demo document. */
+/** The Rental Offer and Agreement as a PDF, from the same text the parties see on InRaf (demo copies are watermarked). */
 export function downloadContractPdf(c: Contract, v: ContractVersion, audit: AuditEntry[]) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   let y = 0;
   const stamp = () => {
+    if (LIVE) { doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 110, 105); doc.text(`InRaf · ${c.ref} v${v.v} · page ${doc.getNumberOfPages()}`, W / 2, H - 24, { align: "center" }); doc.setTextColor(40, 30, 25); return; }
     doc.setTextColor(214, 90, 60); doc.setFontSize(54); doc.setFont("helvetica", "bold");
     doc.text(LIVE ? "TEMPLATE — NOT A LEGAL CONTRACT" : "DEMO — NOT A LEGAL CONTRACT", W / 2, H / 2, { align: "center", angle: 35 });
     doc.setFontSize(9); doc.text(LIVE ? "TEMPLATE — NOT A LEGAL CONTRACT · no legal effect · typed signatures" : "DEMO — NOT A LEGAL CONTRACT · no legal effect · simulated signatures", W / 2, H - 24, { align: "center" });
@@ -25,38 +27,30 @@ export function downloadContractPdf(c: Contract, v: ContractVersion, audit: Audi
   const head = (t: string) => { y += 8; line(t, 12, true, 6); };
 
   stamp(); y = 56;
-  line(LIVE ? "InRaf — Shelf-use agreement" : "InRaf — Shelf-use agreement (demo)", 18, true, 8);
-  line(`${c.ref} · version ${v.v} (${v.kind}) · status: ${v.status}`, 10);
-  line(`Generated ${new Date().toLocaleString()} — ${LIVE ? "template record. Tokens record the right to use a shelf" : "demo record only. Tokens are contractual shelf-use demo records"}, not crypto assets.`, 9);
+  const ag = buildAgreement(c, v);
   const s = v.snapshot;
-  head("A. Store and shelf");
-  line(`Store: ${s.store.name}, ${s.store.address} (${countryName(s.store.country)})`);
-  line(`Registration${LIVE ? "" : " (demo value)"}: ${s.store.registration} · Owner: ${s.store.ownerName}`);
-  line(`Shelf: ${s.shelf.label} · count ${s.shelf.count} · ${s.shelf.spec.widthCm} × ${s.shelf.spec.heightCm} × ${s.shelf.spec.depthCm} cm (W×H×D) · area ${s.shelf.areaCm2} cm² · capacity ${s.shelf.spec.capacity} units`);
-  line(`Location: ${s.shelf.floorNote}`);
-  line(`Permitted categories: ${s.shelf.categories.map(categoryLabel).join(", ") || "—"} · Restrictions: ${s.shelf.restrictions.join(", ") || "none"}`);
-  head("B. Holder");
-  line(`${s.holder.name} (${s.holder.kind}) · registration${LIVE ? "" : " (demo value)"}: ${s.holder.registration}`);
-  head("C. Terms");
-  const t = s.terms;
-  line(`Term: ${t.start} to ${t.end} (${t.months} months) · renewal: ${t.renewal}`);
-  line(`Rent: USD ${t.monthlyRent.toFixed(2)} per month, paid monthly, due 5 days after each period start · illustrative tax ${t.taxRate}% · deposit USD ${t.deposit.toFixed(2)}`);
-  line(`Share of sales: ${t.pricing === "share" ? `share of sales only: the store keeps ${t.salesSharePct}% of each sale (before tax), no fixed rent` : t.pricing === "hybrid" ? `plus ${t.salesSharePct}% of each sale (before tax) kept by the store` : "fixed rent only"}.`);
-  line(`Late payment: ${t.lateFeePct}% after ${t.graceDays} grace days (illustrative).`);
-  line(`Maintenance: ${t.maintenance}`);
-  line(`Display & stock: ${t.display}`);
-  line(`Liability: ${t.liability}`);
-  if (t.noticeDays) line(`Ending early: either side gives ${t.noticeDays} days' notice; a maker who ends a running contract early pays the rent for the notice period.`);
-  if (t.governingLaw) line(`Governing law: ${t.governingLaw}`);
-  line(`Disputes: ${t.dispute}`);
-  if (v.note) line(`Note: ${v.note}`);
-  head("D. Execution record (simulated)");
-  const sig = (label: string, x?: { name: string; at: string; via: string }) => line(`${label}: ${x ? `${x.name} — ${new Date(x.at).toLocaleString()} (${x.via})` : "not recorded"}`);
-  sig("Platform approval", v.adminApproval); sig("Store owner signature", v.ownerSig); sig("Token holder signature", v.holderSig);
-  if (c.terminatedAt) line(`Terminated ${new Date(c.terminatedAt).toLocaleString()}: ${c.terminationReason ?? ""}`);
-  head("E. Audit trail");
+  line(`${LIVE ? "" : "DEMO · "}Rental Offer ${ag.offerNo}`, 18, true, 8);
+  line(`${ag.title} · ${c.ref} version ${v.v} (${v.kind}) · status: ${v.status}`, 10);
+  line(`From: ${s.store.ownerName}, for ${s.store.name}, ${s.store.address}, ${countryName(s.store.country)}`, 10);
+  line(`To: ${s.holder.name}`, 10, true);
+  line(`Date of offer: ${v.offer ? longDate(v.offer.issuedAt) : "not yet issued"} · Open for acceptance until: ${v.offer ? longDate(v.offer.validUntil) : "—"}`, 10);
+  y += 6;
+  ag.letter.forEach((p) => line(p, 10, false, 5));
+  line(`Yours faithfully, ${s.store.ownerName}, for ${s.store.name}`, 10);
+  head("Key terms");
+  ag.summary.forEach(([k, x]) => line(`${k}: ${x}`, 9, false, 3));
+  head(ag.title);
+  ag.clauses.forEach((cl) => { y += 4; line(`${cl.n}. ${cl.title}`, 10, true, 4); cl.paras.forEach((p, i) => line(`${cl.n}.${i + 1}  ${p}`, 9, false, 3)); });
+  if (v.note) { head("Note on this version"); line(v.note); }
+  head("Execution");
+  const sig = (label: string, x?: { name: string; at: string; via: string }) => line(`${label}: ${x ? `${x.name} — ${new Date(x.at).toLocaleString()} (${x.via === "ui" ? "typed name on InRaf" : x.via})` : "not recorded"}`);
+  sig("Offer issued by the Shop Owner", v.ownerSig); sig("Reviewed by InRaf", v.adminApproval); sig("Accepted by the Token Holder", v.holderSig);
+  line(`Document fingerprint: ${ag.fingerprint}${v.offer ? ` · as offered: ${v.offer.fingerprint}` : ""}${v.acceptance ? ` · as accepted: ${v.acceptance.fingerprint}` : ""}`, 9);
+  if (v.acceptance?.confirmedAt) line(`Confirmation of acceptance sent to both parties on ${new Date(v.acceptance.confirmedAt).toLocaleString()}.`, 9);
+  if (c.terminatedAt) line(`Ended ${new Date(c.terminatedAt).toLocaleString()}: ${c.terminationReason ?? ""}`);
+  head("Record of events");
   audit.slice(-25).forEach((a) => line(`${new Date(a.at).toLocaleString()} · ${a.actor} · ${a.action} · ${a.detail}`, 8, false, 3));
   y += 10;
-  line((LIVE ? "This document was produced on InRaf from a template. " : "This document was produced by a browser demo. ") + "Typed names are not electronic signatures, nothing here is legally binding, and no tax or legal assurance is given for any jurisdiction.", 8);
+  line(LIVE ? "Produced on InRaf from its standard agreement template. This is not legal advice; the enforceability of electronic acceptance depends on the applicable law. Payments on InRaf are currently simulated." : "Produced by a browser demo. Typed names are not signatures and nothing here is legally binding.", 8);
   doc.save(`${c.ref}-v${v.v}${LIVE ? "" : "-DEMO"}.pdf`);
 }

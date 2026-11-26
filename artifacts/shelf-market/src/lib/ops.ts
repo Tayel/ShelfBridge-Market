@@ -13,6 +13,7 @@ import {
 } from "./selectors";
 import { CUSTOMER_SERVICE_FEE, EXPIRING_WINDOW_DAYS, PLATFORM_COMMISSION_PCT, countryName, demoTaxFor } from "./data";
 import { addDays, addMonths, nowIso, round2, today, uid } from "./util";
+import { OFFER_VALIDITY_CHOICES, OFFER_VALID_DAYS, buildAgreement, longDate, offerNoOf } from "./agreement";
 
 export class DemoError extends Error {}
 function fail(m: string): never { throw new DemoError(m); }
@@ -207,6 +208,7 @@ export function requestContract(s: State, a: { shopId: string; slot: number; hol
   if (shop.listing.instantBook && asListed) {
     // Instant book: the owner agreed to the standard terms when listing, so their side is recorded now.
     v.ownerSig = { name: shop.ownerName, at: nowIso(), via: "instant" };
+    issueOffer(c, v, OFFER_VALID_DAYS);
     audit(s, "System", "contract.instant_book", c.ref, `${shop.name} uses Instant book; owner pre-agreement recorded on v1`);
   }
   const what = model === "consignment" ? `a consignment placement (${sharePct}% commission)` : asListed ? shelfLabel(shop, a.slot) : `${shelfLabel(shop, a.slot)} with an offer of ${rent}/month`;
@@ -232,7 +234,7 @@ export function counterOffer(s: State, contractId: string, by: "holder" | "owner
   const last = (c.offers ?? []).at(-1);
   if (last && last.monthlyRent === rent && last.months === a.months && last.sharePct === sharePct) fail("That's the same as the current offer. Sign it to accept.");
   v.snapshot = snapshot(s, shop, token, holderOf(s, c.holderId), v.snapshot.terms.start, a.months, rent, terms);
-  v.ownerSig = undefined; v.holderSig = undefined; v.adminApproval = undefined;
+  v.ownerSig = undefined; v.holderSig = undefined; v.adminApproval = undefined; v.offer = undefined; v.acceptance = undefined;
   token.rent = rent;
   c.offers = [...(c.offers ?? []), { by, monthlyRent: rent, months: a.months, sharePct, note: a.note?.trim().slice(0, 500) || undefined, at: nowIso() }];
   const terms_ = model === "consignment" ? `${sharePct}% commission` : `${rent}/month`;
@@ -253,8 +255,9 @@ export function approveContract(s: State, contractId: string, name: string) {
   if (!name.trim()) fail("Type the reviewer name.");
   v.adminApproval = { name: name.trim(), at: nowIso(), via: "ui" };
   audit(s, ROLE_LABEL.admin, "contract.approved", `${c.ref} v${v.v}`, `Approved by ${name.trim()} (simulated admin)`);
-  notify(s, "holder", "Contract approved by platform", `${c.ref} v${v.v} passed admin review.`, `/contracts/${c.id}`);
-  notify(s, "owner", "Contract approved by platform", `${c.ref} v${v.v} passed admin review.`, `/contracts/${c.id}`);
+  const ready = v.offer && !v.holderSig;
+  notify(s, "holder", "Contract approved by platform", ready ? `${c.ref} v${v.v} passed InRaf's review. Offer ${v.offer!.no} is ready for you to accept by ${longDate(v.offer!.validUntil)}.` : `${c.ref} v${v.v} passed InRaf's review.`, `/contracts/${c.id}`);
+  notify(s, "owner", "Contract approved by platform", ready ? `${c.ref} v${v.v} passed InRaf's review. Your offer is with the renter for acceptance.` : `${c.ref} v${v.v} passed InRaf's review. Issue your formal offer to the renter.`, `/contracts/${c.id}`);
   maybeExecute(s, c, v);
 }
 
@@ -267,7 +270,20 @@ export function rejectVersion(s: State, contractId: string, reason: string) {
   if (!executedVersion(c)) releaseToken(s, c, "Initial version rejected");
 }
 
-export function signContract(s: State, contractId: string, party: "owner" | "holder", name: string, via: "ui" | "simulated" | "seed") {
+/** Record the formal offer on a version: its number, validity and the fingerprint of the exact text offered. */
+function issueOffer(c: Contract, v: ContractVersion, days: number) {
+  v.offer = { no: offerNoOf(c, v), issuedAt: nowIso(), validUntil: addDays(today(), days), fingerprint: buildAgreement(c, v).fingerprint };
+}
+export const offerExpired = (v: ContractVersion) => !!v.offer && !v.holderSig && v.offer.validUntil < today();
+/** The Shop Owner still has to issue (or re-issue) the formal offer: never issued, signed before formal offers existed, or expired. */
+export const offerNeeded = (v: ContractVersion) => !v.holderSig && (!v.ownerSig || !v.offer || offerExpired(v));
+
+/**
+ * The Shop Owner signs by issuing the formal rental offer to the Token Holder; the Token Holder signs by accepting it.
+ * Acceptance needs an issued, unexpired offer that InRaf has reviewed, and (from the contract page) the fingerprint of
+ * the text the Token Holder read, so nobody can accept terms that changed after they were shown.
+ */
+export function signContract(s: State, contractId: string, party: "owner" | "holder", name: string, via: "ui" | "simulated" | "seed", opts: { validDays?: number; fingerprint?: string } = {}) {
   const c = contractOf(s, contractId); const v = versionToAct(c);
   const shop = shopOf(s, c.shopId); const holder = holderOf(s, c.holderId);
   if (!name.trim()) fail("Type the signer's full name to sign.");
@@ -275,11 +291,33 @@ export function signContract(s: State, contractId: string, party: "owner" | "hol
   if (via === "ui" && party === "holder" && holder.seeded) fail("This holder is a sample profile. Use “Simulate holder signature”.");
   if (via === "simulated" && party === "owner" && !shop.seeded) fail("You own this store. Sign it yourself.");
   if (via === "simulated" && party === "holder" && !holder.seeded) fail("You are this holder. Sign it yourself.");
-  const key = party === "owner" ? "ownerSig" : "holderSig";
-  if (v[key]) fail(`The ${party === "owner" ? "store owner" : "token holder"} already signed v${v.v}.`);
-  v[key] = { name: name.trim(), at: nowIso(), via };
-  audit(s, via === "ui" ? ROLE_LABEL[party] : `${ROLE_LABEL[party]} (simulated)`, "contract.signed", `${c.ref} v${v.v}`, `Demo signature recorded: “${name.trim()}”`);
-  notify(s, party === "owner" ? "holder" : "owner", "Contract signed", `${name.trim()} signed ${c.ref} v${v.v}.`, `/contracts/${c.id}`);
+  const who = via === "ui" ? ROLE_LABEL[party] : `${ROLE_LABEL[party]} (${via === "seed" ? "seed" : "simulated"})`;
+
+  if (party === "owner") {
+    const reissue = !!v.ownerSig && offerNeeded(v);
+    if (v.ownerSig && !reissue) fail(`The store owner already issued the offer for v${v.v}.`);
+    const days = (OFFER_VALIDITY_CHOICES as readonly number[]).includes(opts.validDays ?? 0) ? opts.validDays! : OFFER_VALID_DAYS;
+    v.ownerSig = { name: name.trim(), at: nowIso(), via };
+    issueOffer(c, v, days);
+    const o = v.offer!;
+    audit(s, who, reissue ? "offer.reissued" : "offer.issued", `${c.ref} v${v.v}`, `Formal offer ${o.no} issued to ${holder.name} by “${name.trim()}”, open until ${o.validUntil}, document ${o.fingerprint}`);
+    notify(s, "holder", "Formal rental offer received", `${shop.ownerName} sent you offer ${o.no} for ${v.snapshot.shelf.label} at ${shop.name}. Review the agreement and accept it by ${longDate(o.validUntil)}${v.adminApproval ? "" : ", once InRaf's review is complete"}.`, `/contracts/${c.id}`);
+    notify(s, "owner", "Offer issued", `Offer ${o.no} was sent to ${holder.name}. It stays open until ${longDate(o.validUntil)}.`, `/contracts/${c.id}`);
+    return;
+  }
+
+  if (v.holderSig) fail(`The token holder already accepted v${v.v}.`);
+  const agreement = buildAgreement(c, v);
+  if (via !== "seed") {
+    if (!v.ownerSig || !v.offer) fail("The store owner hasn't issued a formal offer for this version yet.");
+    if (offerExpired(v)) fail(`Offer ${v.offer.no} expired on ${longDate(v.offer.validUntil)}. Ask the store owner to issue it again.`);
+    if (!v.adminApproval) fail("InRaf is still reviewing this agreement. You can accept it once the review is complete.");
+    if (v.offer.fingerprint !== agreement.fingerprint || (opts.fingerprint && opts.fingerprint !== agreement.fingerprint)) fail("This offer changed since you opened it. Please review the agreement again before accepting.");
+  }
+  if (!v.offer) issueOffer(c, v, OFFER_VALID_DAYS); // sample data made before formal offers
+  v.holderSig = { name: name.trim(), at: nowIso(), via };
+  v.acceptance = { name: name.trim(), at: v.holderSig.at, fingerprint: agreement.fingerprint };
+  audit(s, who, "offer.accepted", `${c.ref} v${v.v}`, `Offer ${v.offer!.no} accepted by “${name.trim()}”, document ${agreement.fingerprint}`);
   maybeExecute(s, c, v);
 }
 
@@ -305,8 +343,14 @@ function maybeExecute(s: State, c: Contract, v: ContractVersion) {
     const tax = round2((t.monthlyRent * t.taxRate) / 100);
     s.invoices.push({ id: uid("inv"), ref: nextRef(s, "RNT"), contractId: c.id, version: v.v, kind: "rent", label: `Rent month ${i + 1} (v${v.v})`, amount: t.monthlyRent, tax, total: round2(t.monthlyRent + tax), dueDate: due });
   }
-  audit(s, "System", "contract.executed", `${c.ref} v${v.v}`, "Admin approval + both demo signatures recorded; version activated");
-  (["holder", "owner", "admin"] as Role[]).forEach((r) => notify(s, r, "Contract active", `${c.ref} v${v.v} is now active. Both sides have signed.`, `/contracts/${c.id}`));
+  audit(s, "System", "contract.executed", `${c.ref} v${v.v}`, `Offer ${v.offer?.no ?? "—"} accepted and reviewed by InRaf; version in force. Confirmations sent to both parties.`);
+  const shop = shopOf(s, c.shopId); const holder = holderOf(s, c.holderId);
+  const what = `${v.snapshot.shelf.label} at ${shop.name}, ${longDate(t.start)} to ${longDate(t.end)}`;
+  const deposit = t.deposit > 0 ? ` Security deposit ${t.deposit.toFixed(2)} is due on ${longDate(t.start)}.` : "";
+  notify(s, "holder", "Rental agreement confirmed", `You accepted offer ${v.offer?.no ?? c.ref}. Agreement ${c.ref} v${v.v} for ${what} is in force.${deposit} The shelf, invoices, deliveries and requests are now in your portal, and the store sees the same records.`, `/contracts/${c.id}`);
+  notify(s, "owner", "Rental agreement confirmed", `${holder.name} accepted offer ${v.offer?.no ?? c.ref}. Agreement ${c.ref} v${v.v} for ${what} is in force. The renter, invoices, deliveries and requests are now in your dashboard, and the renter sees the same records.`, `/contracts/${c.id}`);
+  notify(s, "admin", "Contract active", `${c.ref} v${v.v} is in force: offer accepted by ${holder.name}.`, `/contracts/${c.id}`);
+  if (v.acceptance) v.acceptance.confirmedAt = nowIso();
   syncStage(s, token.id);
 }
 
@@ -325,7 +369,7 @@ export function newVersion(s: State, contractId: string, kind: Extract<VersionKi
   const v: ContractVersion = { v: c.versions.length + 1, kind, createdAt: nowIso(), snapshot: snap, status: "awaiting", note: a.note || undefined };
   c.versions.push(v);
   audit(s, ROLE_LABEL[actor], `contract.${kind}`, `${c.ref} v${v.v}`, `New unsigned version (${a.months} mo at ${a.monthlyRent}/mo). ${a.note}`);
-  (["owner", "holder", "admin"] as Role[]).forEach((r) => notify(s, r, `Contract ${kind} drafted`, `${c.ref} v${v.v} needs approval and both signatures.`, `/contracts/${c.id}`));
+  (["owner", "holder", "admin"] as Role[]).forEach((r) => notify(s, r, `Contract ${kind} drafted`, `${c.ref} v${v.v} needs InRaf's review, the store owner's formal offer and the renter's acceptance.`, `/contracts/${c.id}`));
   return c.id;
 }
 

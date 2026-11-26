@@ -7,6 +7,7 @@ import { awaitingVersion, contractStatus, executedVersion } from "@/lib/selector
 import { usd, type useStore } from "@/lib/store";
 import { daysUntil, fmtDate } from "@/lib/util";
 import type { Contract } from "@/lib/types";
+import { offerNeeded } from "@/lib/ops";
 
 /**
  * "My Retail Opportunities" in the token holder's portal: saved stores, offers in negotiation, contracts waiting
@@ -55,7 +56,7 @@ export function MyOpportunities({ st, holderId }: { st: ReturnType<typeof useSto
       <Section icon={ScrollText} title="Contracts waiting for signatures" count={pending.length}>
         {pending.length === 0 ? <Empty title="Nothing waiting" /> : pending.map((c) => {
           const v = awaitingVersion(c)!;
-          return <Row key={c.id} c={c} right={<Pill tone="warn">{!v.adminApproval ? "InRaf check" : !v.ownerSig ? "Owner to sign" : !v.holderSig ? "You to sign" : "Ready"}</Pill>} />;
+          return <Row key={c.id} c={c} right={<Pill tone="warn">{offerNeeded(v) ? "Owner's offer to come" : !v.adminApproval ? "InRaf check" : !v.holderSig ? "Offer to accept" : "Ready"}</Pill>} />;
         })}
       </Section>
 

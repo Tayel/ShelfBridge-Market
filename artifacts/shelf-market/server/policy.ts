@@ -153,7 +153,9 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       if (party === "owner") need(ownsShop(s, c.shopId, m), "Only the store owner can sign as the store.");
       else if (party === "holder") need(isHolder(c.holderId, m), "Only the shelf holder can sign as the holder.");
       else throw new HttpError(400, "Invalid party.");
-      run(() => ops.signContract(s, c.id, party, String(args[2] ?? ""), "ui")); // simulated signatures aren't allowed live
+      const o = (args[4] ?? {}) as { validDays?: unknown; fingerprint?: unknown };
+      const opts = { validDays: typeof o.validDays === "number" ? o.validDays : undefined, fingerprint: typeof o.fingerprint === "string" ? o.fingerprint.slice(0, 40) : undefined };
+      run(() => ops.signContract(s, c.id, party, String(args[2] ?? ""), "ui", opts)); // simulated signatures aren't allowed live
       break;
     }
     case "newVersion":
