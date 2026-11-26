@@ -34,6 +34,9 @@ export function viewFor(s: State, me: Me | null, principal: string, saved: strin
     ledger: s.ledger.filter((e) => party(e.shopId, e.holderId)),
     notifications: s.notifications.filter((n) => n.userIds?.some((u) => mine.has(u))),
     requests: s.requests.filter((r) => me && r.userId === me.id),
+    cases: s.cases.filter((c) => party(c.shopId, c.holderId)),
+    deliveries: s.deliveries.filter((d) => party(d.shopId, d.holderId)),
+    movements: s.movements.filter((m) => party(m.shopId, m.holderId)),
     audit: [],
     saved,
   };

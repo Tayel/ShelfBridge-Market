@@ -53,6 +53,8 @@ function context(s: State, values: unknown[]) {
       const lst = s.listings.find((x) => x.id === v); if (lst) { shops.add(lst.shopId); holders.add(lst.holderId); }
       const ord = s.orders.find((x) => x.id === v); if (ord) { shops.add(ord.shopId); holders.add(ord.holderId); orders.add(ord.id); }
       const app = s.requests.find((x) => x.id === v); if (app?.userId) users.add(app.userId);
+      const cs = s.cases.find((x) => x.id === v); if (cs) { shops.add(cs.shopId); holders.add(cs.holderId); }
+      const dl = s.deliveries.find((x) => x.id === v); if (dl) { shops.add(dl.shopId); holders.add(dl.holderId); }
     } else if (v && typeof v === "object") Object.values(v).forEach(visit);
   };
   values.forEach(visit);
@@ -198,6 +200,49 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       const l = find(s.listings, str(a0, "product"), "Product");
       canManageShop(s, l.shopId, actor);
       run(() => ops.decideListing(s, l.id, !!args[1], String(args[2] ?? "")));
+      break;
+    }
+
+    // ---------- remote store operations ----------
+    case "openCase": {
+      const a = (a0 ?? {}) as Parameters<typeof ops.openCase>[1];
+      const t = find(s.tokens, str(a.tokenId, "shelf"), "Shelf");
+      need(isHolder(t.holderId, signedIn(actor)), "Only the maker renting this shelf can send requests about it.");
+      run(() => ops.openCase(s, a));
+      break;
+    }
+    case "caseAction": {
+      // The role comes from the account, never from what the browser says.
+      const m = signedIn(actor);
+      const c = find(s.cases, str(a0, "request"), "Request");
+      const role = isHolder(c.holderId, m) ? "holder" : ownsShop(s, c.shopId, m) ? "owner" : m.isAdmin ? "admin" : null;
+      need(role, "This request isn't yours.");
+      run(() => ops.caseAction(s, c.id, role!, m.name || m.email, str(args[1], "action"), (args[2] ?? {}) as Parameters<typeof ops.caseAction>[5]));
+      break;
+    }
+    case "applyCount": {
+      const c = find(s.cases, str(a0, "request"), "Request");
+      need(isHolder(c.holderId, signedIn(actor)), "Only the maker can apply a count to their stock.");
+      run(() => ops.applyCount(s, c.id, String(args[1] ?? "")));
+      break;
+    }
+    case "recordDelivery": {
+      const a = (a0 ?? {}) as Parameters<typeof ops.recordDelivery>[1];
+      const t = find(s.tokens, str(a.tokenId, "shelf"), "Shelf");
+      need(isHolder(t.holderId, signedIn(actor)), "Only the maker renting this shelf can register deliveries.");
+      run(() => ops.recordDelivery(s, a));
+      break;
+    }
+    case "cancelDelivery": {
+      const d = find(s.deliveries, str(a0, "delivery"), "Delivery");
+      need(isHolder(d.holderId, signedIn(actor)), "Only the maker can cancel their delivery.");
+      run(() => ops.cancelDelivery(s, d.id));
+      break;
+    }
+    case "receiveDelivery": {
+      const d = find(s.deliveries, str(a0, "delivery"), "Delivery");
+      need(ownsShop(s, d.shopId, signedIn(actor)), "Only the store owner can confirm what arrived.");
+      run(() => ops.receiveDelivery(s, d.id, (args[1] ?? {}) as Parameters<typeof ops.receiveDelivery>[2]));
       break;
     }
 

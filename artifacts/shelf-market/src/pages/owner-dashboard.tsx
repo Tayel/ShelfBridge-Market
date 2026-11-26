@@ -10,6 +10,8 @@ import { isMine, useSession, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { holderOf } from "@/lib/ops";
+import { CaseCard, DeliveryCard } from "@/components/store-ops";
+import { caseIsOpen } from "@/lib/ops";
 import { awaitingVersion, contractStatus, executedVersion, expiresSoon, invoiceStatus, isExpired, isLowStock, lateFeeFor, shelfLabel, shopShareMoney, slotsOf } from "@/lib/selectors";
 import { daysUntil, downloadBlob, fmtDate, round2, toCsv, today } from "@/lib/util";
 import type { Contract, Order, Shop, State } from "@/lib/types";
@@ -20,9 +22,9 @@ import type { Contract, Order, Shop, State } from "@/lib/types";
  * Each figure links to the list behind it, and owner actions (approve products, sign, suspend a shelf, edit the
  * store) are one click away.
  */
-type Tab = "overview" | "products" | "orders" | "renters" | "shelves" | "money" | "analytics" | "stores";
+type Tab = "overview" | "requests" | "products" | "orders" | "renters" | "shelves" | "money" | "analytics" | "stores";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" }, { id: "products", label: "Products & stock" }, { id: "orders", label: "Orders & sales" },
+  { id: "overview", label: "Overview" }, { id: "requests", label: "Store requests" }, { id: "products", label: "Products & stock" }, { id: "orders", label: "Orders & sales" },
   { id: "renters", label: "Renters & shoppers" }, { id: "shelves", label: "Shelves" }, { id: "money", label: "Money" },
   { id: "analytics", label: "Analytics" }, { id: "stores", label: "Store & settings" },
 ];
@@ -83,7 +85,7 @@ function Portal() {
     );
   }
 
-  const counts: Partial<Record<Tab, number>> = { overview: d.actions.length, products: d.pendingProducts.length, money: d.overdue.length };
+  const counts: Partial<Record<Tab, number>> = { requests: d.openCases.length + d.expectedDeliveries.length, overview: d.actions.length, products: d.pendingProducts.length, money: d.overdue.length };
   return (
     <Shell title="Owner portal" back="/" wide>
       <PageTitle title="My shop" sub={session.live ? "Your stores, shelves, renters, sales and rent, from the records on InRaf." : "Store-owner view. Sample stores use simulated owners."}>
@@ -102,6 +104,7 @@ function Portal() {
 
       <div className="mx-auto mt-4 max-w-6xl" data-testid={`owner-tab-${tab}`}>
         {tab === "overview" && <Overview st={st} d={d} setTab={setTab} />}
+        {tab === "requests" && <Requests st={st} d={d} act={act} pending={pending} name={session.me?.name || session.me?.email || "Store owner"} />}
         {tab === "products" && <Products st={st} d={d} act={act} pending={pending} />}
         {tab === "orders" && <Orders st={st} d={d} />}
         {tab === "renters" && <Renters st={st} d={d} />}
@@ -144,7 +147,13 @@ function useDerived(st: State, shops: Shop[]) {
     const d30 = new Date(Date.now() - 30 * 86400e3).toISOString().slice(0, 10);
     const last30 = captured.filter((o) => when(o) >= d30);
 
+    const cases = st.cases.filter((c) => ids.has(c.shopId)).slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const openCases = cases.filter((c) => caseIsOpen(c) && c.status !== "awaiting-verification");
+    const deliveries = st.deliveries.filter((x) => ids.has(x.shopId)).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const expectedDeliveries = deliveries.filter((x) => x.status === "expected");
     const actions: { text: string; tab: Tab; href?: string; tone: "warn" | "bad" }[] = [
+      ...openCases.filter((c) => ["submitted", "received", "in-progress", "on-hold", "escalated"].includes(c.status)).map((c) => ({ text: `${c.ref}: ${holderOf(st, c.holderId).name} ${c.kind === "incident" ? "reported a problem" : "needs something done"}${c.priority === "urgent" ? " (urgent)" : ""}`, tab: "requests" as Tab, tone: (c.kind === "incident" || c.priority === "urgent" ? "bad" : "warn") as "bad" | "warn" })),
+      ...expectedDeliveries.map((x) => ({ text: `Delivery ${x.ref} from ${holderOf(st, x.holderId).name} is on its way${x.expectedOn ? ` (${fmtDate(x.expectedOn)})` : ""}: confirm what arrives`, tab: "requests" as Tab, tone: "warn" as const })),
       ...awaiting.map((c) => {
         const v = awaitingVersion(c)!; const last = c.offers?.at(-1); const s = shopOf(c.shopId);
         const offer = c.model === "consignment" ? `consignment at ${v.snapshot.terms.salesSharePct}% commission` : s && v.snapshot.terms.monthlyRent !== s.price ? `an offer of ${usd(v.snapshot.terms.monthlyRent)}/mo (listed ${usd(s.price)})` : "a rental at your listed price";
@@ -161,7 +170,7 @@ function useDerived(st: State, shops: Shop[]) {
         ...(!s.hours ? [{ text: `${s.name}: add your opening hours`, tab: "stores" as Tab, href: `/owner-dashboard/shops/${s.id}`, tone: "warn" as const }] : []),
       ]),
     ];
-    return { dueNow, upcoming, shops, ids, shopOf, contracts, awaiting, active, renewals, tokens, totalShelves, listings, pendingProducts, onSale, expiredOnShelf, lowStock, orders, captured, refundRequests, invoices, overdue, sumInv, share, last30, actions };
+    return { cases, openCases, deliveries, expectedDeliveries, dueNow, upcoming, shops, ids, shopOf, contracts, awaiting, active, renewals, tokens, totalShelves, listings, pendingProducts, onSale, expiredOnShelf, lowStock, orders, captured, refundRequests, invoices, overdue, sumInv, share, last30, actions };
   }, [st, shops]);
 }
 type D = ReturnType<typeof useDerived>;
@@ -247,6 +256,21 @@ function Applications({ st }: { st: State }) {
         ))}
       </div>
     </Card>
+  );
+}
+
+// ---------- store requests from makers ----------
+function Requests({ st, d, act, pending, name }: { st: State; d: D; act: Act; pending: boolean; name: string }) {
+  const [f, setF] = useState<"open" | "deliveries" | "closed" | "all">("open");
+  const rows = d.cases.filter((c) => f === "all" || (f === "open" && caseIsOpen(c)) || (f === "closed" && !caseIsOpen(c)));
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Makers ask your store to restock, rearrange, photograph, count or check their shelf, and report problems here. Acknowledge, assign a staff member, and mark it done with a note and photos: the maker then checks your evidence. Confirm what arrives in each delivery so their stock is right.</p>
+      <div className="flex flex-wrap gap-2">{([["open", `Open (${d.cases.filter(caseIsOpen).length})`], ["deliveries", `Deliveries (${d.expectedDeliveries.length} expected)`], ["closed", "Closed"], ["all", "All"]] as const).map(([k, l]) => <button key={k} onClick={() => setF(k)} aria-pressed={f === k} className={`rounded-full border px-3 py-1.5 text-sm ${f === k ? "border-foreground bg-foreground text-background" : "border-border"}`} data-testid={`filter-requests-${k}`}>{l}</button>)}</div>
+      {f === "deliveries"
+        ? (d.deliveries.length === 0 ? <Empty title="No deliveries" /> : d.deliveries.map((x) => <DeliveryCard key={x.id} st={st} d={x} viewer="owner" act={act} pending={pending} />))
+        : (rows.length === 0 ? <Empty title="Nothing here" text="Requests from makers renting your shelves appear here." /> : rows.map((c) => <CaseCard key={c.id} st={st} c={c} viewer="owner" viewerName={name} act={act} pending={pending} defaultOpen={c.status === "submitted"} />))}
+    </div>
   );
 }
 

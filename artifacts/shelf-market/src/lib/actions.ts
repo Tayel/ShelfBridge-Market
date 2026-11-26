@@ -37,5 +37,11 @@ export const actions = {
   markRead: (role: Role, id?: string) => call("markRead", [role, id], (d) => ops.markRead(d, role, id)),
   submitOwnerRequest: (a: ops.OwnerRequestInput) => call("submitOwnerRequest", [a], (d) => ops.submitOwnerRequest(d, a)),
   decideOwnerRequest: (id: string, status: "in-review" | "accepted" | "declined", note: string) => call("decideOwnerRequest", [id, status, note], (d) => ops.decideOwnerRequest(d, id, status, note)),
+  openCase: (a: Parameters<typeof ops.openCase>[1]) => call("openCase", [a], (d) => ops.openCase(d, a)),
+  caseAction: (id: string, actor: "holder" | "owner" | "admin", name: string, action: string, p: Parameters<typeof ops.caseAction>[5] = {}) => call("caseAction", [id, action, p, actor, name], (d) => ops.caseAction(d, id, actor, name, action, p)),
+  applyCount: (id: string, note: string) => call("applyCount", [id, note], (d) => ops.applyCount(d, id, note)),
+  recordDelivery: (a: Parameters<typeof ops.recordDelivery>[1]) => call("recordDelivery", [a], (d) => ops.recordDelivery(d, a)),
+  cancelDelivery: (id: string) => call("cancelDelivery", [id], (d) => ops.cancelDelivery(d, id)),
+  receiveDelivery: (id: string, a: Parameters<typeof ops.receiveDelivery>[2]) => call("receiveDelivery", [id, a], (d) => ops.receiveDelivery(d, id, a)),
   reset: (): Promise<Result> => Promise.resolve(resetDemo()),
 };

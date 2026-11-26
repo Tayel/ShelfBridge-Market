@@ -206,6 +206,12 @@ export interface State {
   saved: string[]; // shop ids on the viewer's wishlist
   /** Applications from the "I have a shop" journey: space, products and surplus stock offered to InRaf. */
   requests: OwnerRequest[];
+  /** Requests to the store (restock, photos, counts...) and incidents (missing, damaged, disputes). */
+  cases: OpsCase[];
+  /** Incoming stock the maker sends to a store, and what the store received. */
+  deliveries: Delivery[];
+  /** Stock changes other than sales and refunds (which come from orders): restocks, receipts, count adjustments. */
+  movements: StockMovement[];
   seq: number;
   offersSeeded?: string; // when the About to Expire / About to Fly samples were added
   airportsSeeded?: string; // when the airport shops for About to Fly Inside were added
@@ -241,4 +247,45 @@ export interface OwnerRequest {
   terms: string;
   /** The shop listing created from it when the owner rents out space. */
   shopId?: string;
+}
+
+// ---------- remote store operations ----------
+export type OpsKind = "task" | "incident";
+export type OpsStatus = "submitted" | "received" | "in-progress" | "on-hold" | "awaiting-verification" | "completed" | "resolved" | "rejected" | "cancelled" | "escalated";
+export type OpsActor = "holder" | "owner" | "admin";
+export interface OpsEvent { at: string; by: OpsActor; byName: string; action: string; status?: OpsStatus; note?: string; photos?: string[] }
+/** A physical stock count: what the system expected and what the store counted. */
+export interface CountLine { listingId: string; name: string; expected: number; counted?: number }
+export interface OpsCase {
+  id: string; ref: string; kind: OpsKind; type: string;
+  tokenId: string; shopId: string; holderId: string;
+  listingId?: string; orderId?: string; deliveryId?: string;
+  priority: "normal" | "urgent"; description: string; status: OpsStatus;
+  createdAt: string; updatedAt: string;
+  /** The store employee the owner says is handling it. */
+  assignee?: string;
+  events: OpsEvent[];
+  /** Photos attached as evidence, with who added them and when. */
+  evidence: { url: string; at: string; by: OpsActor; byName: string; caption?: string }[];
+  count?: CountLine[];
+  /** Set when the maker applies a completed count to their stock. */
+  countAppliedAt?: string;
+  resolution?: string;
+}
+export interface DeliveryLine { listingId: string; name: string; expected: number; received?: number; damaged?: number }
+export interface Delivery {
+  id: string; ref: string; tokenId: string; shopId: string; holderId: string;
+  carrier?: string; tracking?: string; expectedOn?: string; note?: string;
+  lines: DeliveryLine[];
+  status: "expected" | "received" | "partial" | "cancelled";
+  createdAt: string; receivedAt?: string; receivedBy?: string; receiptNote?: string; photos?: string[];
+}
+export interface StockMovement {
+  id: string; at: string; listingId: string; tokenId: string; shopId: string; holderId: string;
+  type: "restock" | "delivery-received" | "delivery-damaged" | "count-adjustment";
+  /** Signed change to the units on the shelf (damaged units on arrival are recorded with 0 effect). */
+  qty: number; units: number; ref?: string;
+  by: OpsActor; byName: string; note?: string;
+  /** Who the figure comes from: what the maker reported, what the store reported, or a physical count. */
+  source: "maker-reported" | "store-reported" | "physical-count";
 }

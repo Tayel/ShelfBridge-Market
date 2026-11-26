@@ -7,7 +7,8 @@ import { Card, Empty, ErrorNote, Notice, Pill, SmallButton, Stat, Tabs, inputCls
 import { LIVE, useStore, usd } from "@/lib/store";
 import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
-import { holderOf } from "@/lib/ops";
+import { caseIsOpen, holderOf } from "@/lib/ops";
+import { CaseCard } from "@/components/store-ops";
 import {
   awaitingVersion, contractStatus, executedVersion, expiresSoon, holderMoney, invoiceStatus, isLowStock, reconcile, shelfBlockReason, shelfLabel, slotsOf,
 } from "@/lib/selectors";
@@ -165,6 +166,7 @@ export default function Admin() {
         <Tabs value={tab} onChange={setTab} options={[
           { id: "overview", label: "Overview" }, { id: "stores", label: "Stores", count: st.shops.filter((s) => s.status === "pending").length },
           { id: "shelves", label: "Shelves" }, { id: "holders", label: "Holders" }, { id: "contracts", label: "Contracts", count: awaiting.length },
+          { id: "operations", label: "Operations", count: st.cases.filter((c) => c.status === "escalated" || (c.kind === "incident" && caseIsOpen(c))).length },
           { id: "applications", label: "Applications", count: st.requests.filter((r) => r.status === "received").length },
           { id: "finance", label: "Finance", count: refunds }, { id: "audit", label: "Audit" },
         ]} />
@@ -228,6 +230,13 @@ export default function Admin() {
             </Link>
           );
         }))}
+
+        {tab === "operations" && (
+          <>
+            <Notice tone="mute">Store requests and incidents between makers and stores. InRaf steps in on escalations and incidents; everyday requests are handled by the store.</Notice>
+            {st.cases.length === 0 ? <Empty title="No requests or incidents yet" /> : st.cases.slice().sort((a, b) => Number(b.status === "escalated") - Number(a.status === "escalated") || b.updatedAt.localeCompare(a.updatedAt)).map((c) => <CaseCard key={c.id} st={st} c={c} viewer="admin" viewerName="InRaf team" act={act} pending={pending} defaultOpen={c.status === "escalated"} />)}
+          </>
+        )}
 
         {tab === "applications" && (st.requests.length === 0 ? <Empty title="No applications yet" text="Applications from the “I have a shop” journey appear here." /> : st.requests.slice().reverse().map((r) => (
           <Card key={r.id} testId={`row-application-${r.id}`}>

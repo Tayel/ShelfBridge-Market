@@ -4,7 +4,7 @@
  * a payment provider, an e-signature service or a bank.
  */
 import type {
-  Contract, ContractModel, ContractSnapshot, ContractVersion, Holder, LedgerEntry, LedgerType, Listing, Order, OwnerRequest, RentInvoice,
+  Contract, ContractModel, ContractSnapshot, ContractVersion, Delivery, Holder, OpsActor, OpsCase, OpsStatus, StockMovement, LedgerEntry, LedgerType, Listing, Order, OwnerRequest, RentInvoice,
   RentalTerms, Role, Shop, ShopListing, ShopPhoto, State, Token, VersionKind,
 } from "./types";
 import {
@@ -507,6 +507,7 @@ export function restockListing(s: State, id: string, qty: number) {
   const used = shelfUnits(s, l.tokenId);
   if (used + qty > shop.shelf.capacity) fail(`Capacity ${shop.shelf.capacity} units; only ${Math.max(0, shop.shelf.capacity - used)} free.`);
   l.available += qty; l.initialQty += qty; l.updatedAt = nowIso();
+  movement(s, l, "restock", qty, { by: "holder", byName: holderOf(s, l.holderId).name, source: "maker-reported", note: "Added by the maker" });
   audit(s, ROLE_LABEL.holder, "product.restocked", l.sku, `+${qty} units (simulated)`);
 }
 
@@ -767,4 +768,187 @@ export function decideOwnerRequest(s: State, id: string, status: OwnerRequest["s
   r.status = status; r.statusNote = note || undefined;
   audit(s, ROLE_LABEL.admin, `application.${status}`, id, `${r.ref}: ${note || "no note"}`);
   notify(s, "owner", `Application ${status === "in-review" ? "in review" : status}`, `${r.ref} for ${r.business.name}.${note ? ` Note: ${note}` : ""}`, "/owner-dashboard");
+}
+
+// ---------- remote store operations: requests, incidents, deliveries, counts ----------
+export const TASK_TYPES: Record<string, string> = {
+  restock: "Restock products", rearrange: "Rearrange products", display: "Update the display", "stock-check": "Check physical stock",
+  photo: "Photograph the shelf", "expiry-check": "Check expiry dates", "remove-damaged": "Remove damaged products", clean: "Clean the shelf",
+  "price-update": "Update approved price labels", "receive-delivery": "Receive an incoming delivery", "prepare-collection": "Prepare stock for collection",
+  "missing-check": "Look for missing products", count: "Full physical stock count", "investigate-sales": "Investigate a sales discrepancy", maintenance: "Report a maintenance issue",
+};
+export const INCIDENT_TYPES: Record<string, string> = {
+  missing: "Missing products", damaged: "Damaged products", theft: "Suspected theft", "wrong-attribution": "Sale attributed wrongly",
+  "wrong-price": "Wrong price", "unauthorised-removal": "Products removed without permission", expired: "Expired products on the shelf",
+  "customer-return": "Customer return", "refund-dispute": "Refund dispute", "delivery-discrepancy": "Delivery discrepancy",
+  "shelf-damage": "Shelf damage", "inventory-difference": "Inventory difference", "wrong-deduction": "Wrong financial deduction",
+  "payment-dispute": "Payment dispute", contract: "Contract disagreement",
+};
+const OPEN: OpsStatus[] = ["submitted", "received", "in-progress", "on-hold", "awaiting-verification", "escalated"];
+export const caseIsOpen = (c: OpsCase) => OPEN.includes(c.status);
+const cleanPhotos = (p: unknown) => (Array.isArray(p) ? p.filter((x): x is string => typeof x === "string" && x.startsWith("data:image/")).slice(0, 6) : []);
+
+function movement(s: State, l: Listing, type: StockMovement["type"], qty: number, o: { by: OpsActor; byName: string; source: StockMovement["source"]; note?: string; ref?: string; units?: number }) {
+  s.movements.push({ id: uid("mov"), at: nowIso(), listingId: l.id, tokenId: l.tokenId, shopId: l.shopId, holderId: l.holderId, type, qty, units: o.units ?? Math.abs(qty), ref: o.ref, by: o.by, byName: o.byName, note: o.note, source: o.source });
+}
+const ownerName = (s: State, shopId: string) => shopOf(s, shopId).ownerName || "Store owner";
+
+export function openCase(s: State, a: { kind: "task" | "incident"; type: string; tokenId: string; listingId?: string; orderId?: string; deliveryId?: string; priority?: "normal" | "urgent"; description: string; photos?: string[] }): string {
+  const t = tokenOf(s, a.tokenId);
+  if (t.released) fail("This shelf is no longer rented.");
+  const types = a.kind === "incident" ? INCIDENT_TYPES : TASK_TYPES;
+  if (!types[a.type]) fail("Choose what you need.");
+  const desc = (a.description ?? "").trim();
+  if (desc.length < 5) fail("Describe what you need in a few words.");
+  if (desc.length > 1000) fail("Keep the description under 1,000 characters.");
+  if (a.listingId && listingOf(s, a.listingId).tokenId !== t.id) fail("That product isn't on this shelf.");
+  if (a.orderId && orderOf(s, a.orderId).tokenId !== t.id) fail("That order isn't from this shelf.");
+  if (a.deliveryId && !s.deliveries.some((d) => d.id === a.deliveryId && d.tokenId === t.id)) fail("That delivery isn't for this shelf.");
+  const shop = shopOf(s, t.shopId); const holder = holderOf(s, t.holderId);
+  const ref = nextRef(s, a.kind === "incident" ? "INC" : "TSK");
+  const count = a.type === "count" ? s.listings.filter((l) => l.tokenId === t.id && ["active", "inactive", "approved"].includes(l.status))
+    .map((l) => ({ listingId: l.id, name: l.name, expected: l.available + reservedQty(s, l.id) })) : undefined;
+  if (count && !count.length) fail("There are no products on this shelf to count.");
+  const photos = cleanPhotos(a.photos);
+  const c: OpsCase = {
+    id: uid("case"), ref, kind: a.kind, type: a.type, tokenId: t.id, shopId: shop.id, holderId: holder.id, listingId: a.listingId, orderId: a.orderId, deliveryId: a.deliveryId,
+    priority: a.priority === "urgent" ? "urgent" : "normal", description: desc, status: "submitted", createdAt: nowIso(), updatedAt: nowIso(),
+    events: [{ at: nowIso(), by: "holder", byName: holder.name, action: "submitted", status: "submitted", note: desc, photos: photos.length ? photos : undefined }],
+    evidence: photos.map((url) => ({ url, at: nowIso(), by: "holder" as const, byName: holder.name, caption: "Added with the request" })), count,
+  };
+  s.cases.push(c);
+  audit(s, ROLE_LABEL.holder, `${a.kind}.opened`, ref, `${types[a.type]} · ${shelfLabel(shop, t.slot)}`);
+  notify(s, "owner", a.kind === "incident" ? "Incident reported" : "New request from a maker", `${ref}: ${types[a.type]} on ${shelfLabel(shop, t.slot)}${c.priority === "urgent" ? " (urgent)" : ""}.`, "/owner-dashboard?tab=requests");
+  if (a.kind === "incident") notify(s, "admin", "Incident reported", `${ref} at ${shop.name}: ${types[a.type]}.`, "/admin?tab=operations");
+  return c.id;
+}
+
+/** Every step of a request or incident, by who may take it. Physical work is only "completed" once the maker accepts the store's evidence. */
+export function caseAction(s: State, id: string, actor: OpsActor, actorName: string, action: string, p: { note?: string; photos?: string[]; assignee?: string; counts?: Record<string, number> } = {}) {
+  const c = s.cases.find((x) => x.id === id) ?? fail("Request not found.");
+  const note = (p.note ?? "").trim().slice(0, 1000);
+  const photos = cleanPhotos(p.photos);
+  const shop = shopOf(s, c.shopId);
+  const label = (c.kind === "incident" ? INCIDENT_TYPES : TASK_TYPES)[c.type] ?? c.type;
+  const set = (status: OpsStatus) => { c.status = status; };
+  const allowed: Record<OpsActor, string[]> = {
+    owner: ["receive", "start", "hold", "complete", "reject", "comment"],
+    holder: ["accept", "concern", "cancel", "escalate", "comment"],
+    admin: ["comment", "resolve", "reject"],
+  };
+  if (!allowed[actor].includes(action)) fail("You can't do that on this request.");
+  if (!caseIsOpen(c) && action !== "comment") fail(`This request is already ${c.status}.`);
+  switch (action) {
+    case "receive": if (c.status !== "submitted") fail("Only new requests can be acknowledged."); set("received"); break;
+    case "start":
+      if (!["submitted", "received", "on-hold"].includes(c.status)) fail("This request can't be started now.");
+      c.assignee = (p.assignee ?? "").trim().slice(0, 80) || c.assignee || actorName; set("in-progress"); break;
+    case "hold": if (!note) fail("Say why it's on hold."); if (!["received", "in-progress"].includes(c.status)) fail("Only active requests can be put on hold."); set("on-hold"); break;
+    case "complete": {
+      if (!["received", "in-progress"].includes(c.status)) fail("Start the request before completing it.");
+      if (!note) fail("Describe what was done.");
+      if (c.type === "photo" && !photos.length) fail("Add at least one photo of the shelf.");
+      if (c.count) {
+        for (const line of c.count) {
+          const n = p.counts?.[line.listingId];
+          if (!Number.isInteger(n) || (n as number) < 0) fail(`Enter the counted quantity for ${line.name}.`);
+          line.counted = n as number;
+        }
+      }
+      c.resolution = note; set("awaiting-verification"); break;
+    }
+    case "reject": if (!note) fail("Say why."); set("rejected"); break;
+    case "accept": if (c.status !== "awaiting-verification") fail("There's nothing to accept yet."); set(c.kind === "incident" ? "resolved" : "completed"); break;
+    case "concern": if (c.status !== "awaiting-verification") fail("You can raise a concern once the store says it's done."); if (!note) fail("Say what isn't right."); set("in-progress"); break;
+    case "cancel": if (!["submitted", "received"].includes(c.status)) fail("Work has started: raise a concern or escalate instead."); set("cancelled"); break;
+    case "escalate": if (!note) fail("Say why you're escalating."); set("escalated"); break;
+    case "resolve": if (!note) fail("Write the resolution."); c.resolution = note; set("resolved"); break;
+    case "comment": if (!note && !photos.length) fail("Write a message or add a photo."); break;
+  }
+  c.updatedAt = nowIso();
+  c.events.push({ at: nowIso(), by: actor, byName: actorName, action, status: action === "comment" ? undefined : c.status, note: note || undefined, photos: photos.length ? photos : undefined });
+  photos.forEach((url) => c.evidence.push({ url, at: nowIso(), by: actor, byName: actorName, caption: action === "complete" ? "Completion evidence" : undefined }));
+  audit(s, ROLE_LABEL[actor === "holder" ? "holder" : actor === "owner" ? "owner" : "admin"], `${c.kind}.${action}`, c.ref, `${label}: ${note || c.status}`);
+  const tell = (r: Role, title: string) => notify(s, r, title, `${c.ref} (${label}) at ${shop.name}${note ? `: ${note}` : ""}`, r === "owner" ? "/owner-dashboard?tab=requests" : r === "admin" ? "/admin?tab=operations" : "/dashboard?tab=requests");
+  if (actor !== "holder") tell("holder", action === "complete" ? "Store says it's done: please check" : action === "comment" ? "New message on your request" : `Request ${c.status}`);
+  if (actor !== "owner") tell("owner", action === "comment" ? "New message on a request" : action === "concern" ? "The maker raised a concern" : `Request ${c.status}`);
+  if (action === "escalate") tell("admin", "Request escalated to InRaf");
+}
+
+/** Apply a completed physical count to the maker's stock. Differences become count adjustments — never sales, losses or damage without evidence. */
+export function applyCount(s: State, id: string, note: string) {
+  const c = s.cases.find((x) => x.id === id) ?? fail("Count not found.");
+  if (c.type !== "count" || !c.count) fail("That isn't a stock count.");
+  if (c.status !== "completed") fail("Accept the count first.");
+  if (c.countAppliedAt) fail("This count was already applied.");
+  if (!note.trim()) fail("Say why you're adjusting your stock.");
+  const holder = holderOf(s, c.holderId);
+  for (const line of c.count) {
+    const l = listingOf(s, line.listingId);
+    const reserved = reservedQty(s, l.id);
+    const target = Math.max(0, (line.counted ?? 0) - reserved);
+    const diff = target - l.available;
+    if (diff === 0) continue;
+    l.available = target; l.updatedAt = nowIso();
+    movement(s, l, "count-adjustment", diff, { by: "holder", byName: holder.name, source: "physical-count", ref: c.ref, note: `${note.trim()} (expected ${line.expected}, counted ${line.counted})` });
+  }
+  c.countAppliedAt = nowIso();
+  c.events.push({ at: nowIso(), by: "holder", byName: holder.name, action: "count applied", note: note.trim() });
+  audit(s, ROLE_LABEL.holder, "count.applied", c.ref, note.trim());
+}
+
+export function recordDelivery(s: State, a: { tokenId: string; lines: { listingId: string; expected: number }[]; carrier?: string; tracking?: string; expectedOn?: string; note?: string }): string {
+  const t = tokenOf(s, a.tokenId);
+  if (t.released) fail("This shelf is no longer rented.");
+  const lines = (a.lines ?? []).filter((x) => x && x.expected);
+  if (!lines.length) fail("Add at least one product and quantity.");
+  const shop = shopOf(s, t.shopId);
+  const out = lines.map((x) => {
+    const l = listingOf(s, x.listingId);
+    if (l.tokenId !== t.id) fail("A product in this delivery isn't on this shelf.");
+    if (!["active", "inactive", "approved"].includes(l.status)) fail(`${l.name} must be approved by the store before stock can be sent.`);
+    if (!Number.isInteger(x.expected) || x.expected < 1 || x.expected > 10000) fail(`Enter a whole quantity for ${l.name}.`);
+    return { listingId: l.id, name: l.name, expected: x.expected };
+  });
+  if (a.expectedOn && !/^\d{4}-\d{2}-\d{2}$/.test(a.expectedOn)) fail("Invalid expected date.");
+  const d: Delivery = { id: uid("dlv"), ref: nextRef(s, "DLV"), tokenId: t.id, shopId: shop.id, holderId: t.holderId, carrier: a.carrier?.trim().slice(0, 80) || undefined, tracking: a.tracking?.trim().slice(0, 80) || undefined, expectedOn: a.expectedOn || undefined, note: a.note?.trim().slice(0, 500) || undefined, lines: out, status: "expected", createdAt: nowIso() };
+  s.deliveries.push(d);
+  audit(s, ROLE_LABEL.holder, "delivery.registered", d.ref, `${out.reduce((n, x) => n + x.expected, 0)} units to ${shelfLabel(shop, t.slot)}`);
+  notify(s, "owner", "Delivery on its way", `${d.ref}: ${out.reduce((n, x) => n + x.expected, 0)} units for ${shelfLabel(shop, t.slot)}${d.expectedOn ? `, expected ${d.expectedOn}` : ""}.`, "/owner-dashboard?tab=requests");
+  return d.id;
+}
+
+export function cancelDelivery(s: State, id: string) {
+  const d = s.deliveries.find((x) => x.id === id) ?? fail("Delivery not found.");
+  if (d.status !== "expected") fail("This delivery was already received.");
+  d.status = "cancelled";
+  audit(s, ROLE_LABEL.holder, "delivery.cancelled", d.ref, "Cancelled by the maker");
+  notify(s, "owner", "Delivery cancelled", `${d.ref} won't arrive.`, "/owner-dashboard?tab=requests");
+}
+
+/** The store confirms what physically arrived. Good units go on the shelf; damaged and missing units are recorded, not added. */
+export function receiveDelivery(s: State, id: string, a: { lines: { listingId: string; received: number; damaged: number }[]; note?: string; photos?: string[] }) {
+  const d = s.deliveries.find((x) => x.id === id) ?? fail("Delivery not found.");
+  if (d.status !== "expected") fail(`This delivery is ${d.status}.`);
+  const shop = shopOf(s, d.shopId); const who = ownerName(s, d.shopId);
+  let added = 0;
+  for (const line of d.lines) {
+    const r = a.lines?.find((x) => x.listingId === line.listingId);
+    const rec = r?.received ?? -1, dmg = r?.damaged ?? 0;
+    if (!Number.isInteger(rec) || rec < 0 || !Number.isInteger(dmg) || dmg < 0) fail(`Enter the quantities received for ${line.name}.`);
+    if (rec + dmg > line.expected) fail(`${line.name}: received plus damaged can't exceed the ${line.expected} expected.`);
+    added += rec;
+  }
+  if (shelfUnits(s, d.tokenId) + added > shop.shelf.capacity) fail(`The shelf holds ${shop.shelf.capacity} units: there isn't room for all of this delivery.`);
+  for (const line of d.lines) {
+    const r = a.lines.find((x) => x.listingId === line.listingId)!;
+    line.received = r.received; line.damaged = r.damaged;
+    const l = listingOf(s, line.listingId);
+    if (r.received) { l.available += r.received; l.initialQty += r.received; l.updatedAt = nowIso(); movement(s, l, "delivery-received", r.received, { by: "owner", byName: who, source: "store-reported", ref: d.ref }); }
+    if (r.damaged) movement(s, l, "delivery-damaged", 0, { by: "owner", byName: who, source: "store-reported", ref: d.ref, units: r.damaged, note: "Arrived damaged: not put on sale" });
+  }
+  const short = d.lines.some((x) => (x.received ?? 0) < x.expected);
+  d.status = short ? "partial" : "received"; d.receivedAt = nowIso(); d.receivedBy = who; d.receiptNote = a.note?.trim().slice(0, 500) || undefined; d.photos = cleanPhotos(a.photos);
+  audit(s, ROLE_LABEL.owner, "delivery.received", d.ref, `${added} units put on the shelf${short ? ", with shortfall or damage" : ""}`);
+  notify(s, "holder", short ? "Delivery received with differences" : "Delivery received", `${d.ref}: ${added} units are on your shelf${short ? ". Check the differences and report an incident if needed" : ""}.`, "/dashboard?tab=deliveries");
 }
