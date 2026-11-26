@@ -700,7 +700,7 @@ export function submitOwnerRequest(s: State, input: OwnerRequestInput): string {
   if (offers.includes("rent") && input.shop) shopId = createShop(s, input.shop);
   const { shop: _shop, ...rest } = input;
   s.requests.push({
-    ...rest, offers, spaces: input.spaces ?? [], products: offers.includes("sell") ? input.products : [], surplus: offers.includes("surplus") ? input.surplus : [],
+    ...rest, offers, spaces: offers.includes("rent") ? input.spaces ?? [] : [], airport: offers.includes("rent") ? input.airport : undefined, products: offers.includes("sell") ? input.products : [], surplus: offers.includes("surplus") ? input.surplus : [],
     services: input.services ?? [], id, ref, createdAt: nowIso(), status: "received", shopId,
   });
   audit(s, ROLE_LABEL.owner, "application.submitted", id, `${ref} ${b.name}: ${offers.join(", ")}`);
