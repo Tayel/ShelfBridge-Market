@@ -112,13 +112,14 @@ export function createShop(s: State, input: ShopInput): string {
   return id;
 }
 
-export function updateShop(s: State, id: string, patch: Partial<Pick<Shop, "name" | "address" | "registration" | "ownerName" | "price" | "floorNote" | "shelf" | "terms" | "city" | "photos">>) {
+export function updateShop(s: State, id: string, patch: Partial<Pick<Shop, "name" | "address" | "registration" | "ownerName" | "price" | "floorNote" | "shelf" | "terms" | "city" | "photos" | "hours">>) {
   const shop = shopOf(s, id);
   if (shop.seeded) fail("Seeded sample stores are read-only.");
   // Shops listed before photos were required can keep saving other details until they add some.
   if (patch.photos && (patch.photos.length || shop.photos.length)) checkPhotos(patch.photos);
   if (patch.shelf && (patch.shelf.capacity < 1 || patch.shelf.widthCm < 10 || patch.shelf.heightCm < 10 || patch.shelf.depthCm < 10)) fail("Shelf dimensions must be at least 10 cm and capacity at least 1 unit.");
   if (patch.price !== undefined && patch.price <= 0) fail("Rent must be above zero.");
+  if (patch.hours !== undefined && patch.hours.length > 120) fail("Keep opening hours under 120 characters.");
   if (patch.terms && (patch.terms.months < 1 || patch.terms.months > 36)) fail("Duration must be 1–36 months.");
   Object.assign(shop, patch);
   audit(s, ROLE_LABEL.owner, "store.updated", id, "Store and shelf details updated (existing contract versions unchanged)");
@@ -305,7 +306,7 @@ function maybeExecute(s: State, c: Contract, v: ContractVersion) {
     s.invoices.push({ id: uid("inv"), ref: nextRef(s, "RNT"), contractId: c.id, version: v.v, kind: "rent", label: `Rent month ${i + 1} (v${v.v})`, amount: t.monthlyRent, tax, total: round2(t.monthlyRent + tax), dueDate: due });
   }
   audit(s, "System", "contract.executed", `${c.ref} v${v.v}`, "Admin approval + both demo signatures recorded; version activated");
-  (["holder", "owner", "admin"] as Role[]).forEach((r) => notify(s, r, "Contract active", `${c.ref} v${v.v} is now active (demo, not a legal contract).`, `/contracts/${c.id}`));
+  (["holder", "owner", "admin"] as Role[]).forEach((r) => notify(s, r, "Contract active", `${c.ref} v${v.v} is now active. Both sides have signed.`, `/contracts/${c.id}`));
   syncStage(s, token.id);
 }
 
@@ -374,12 +375,12 @@ export function payInvoice(s: State, invoiceId: string) {
   notify(s, "holder", "Rent receipt ready", `Demo receipt ${inv.receiptRef} for ${inv.label}.`, `/contracts/${c.id}`);
 }
 
-export function setShelfSuspended(s: State, tokenId: string, on: boolean, note: string) {
+export function setShelfSuspended(s: State, tokenId: string, on: boolean, note: string, actor: Role = "admin") {
   const t = tokenOf(s, tokenId);
   if (!!t.suspended === on) fail(on ? "Shelf already suspended." : "Shelf is not suspended.");
   t.suspended = on;
   const shop = shopOf(s, t.shopId);
-  audit(s, ROLE_LABEL.admin, on ? "shelf.suspended" : "shelf.reinstated", shelfLabel(shop, t.slot), note || "—");
+  audit(s, ROLE_LABEL[actor], on ? "shelf.suspended" : "shelf.reinstated", shelfLabel(shop, t.slot), note || "—");
   notify(s, "holder", on ? "Shelf suspended" : "Shelf reinstated", `${shelfLabel(shop, t.slot)} at ${shop.name}${note ? `: ${note}` : ""}`, `/shelf/${t.id}`);
   notify(s, "owner", on ? "Shelf suspended" : "Shelf reinstated", `${shelfLabel(shop, t.slot)} at ${shop.name}`, "/owner-dashboard?tab=shelves");
 }

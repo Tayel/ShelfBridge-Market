@@ -36,6 +36,8 @@ export interface Shop {
   venue?: "airport";
   /** The kind of place, from the "I have a shop" journey (street, mall, airport, hotel...). Absent on older stores. */
   place?: VenueType;
+  /** Opening hours as the owner writes them, e.g. "Sat–Thu 9:00–22:00, Fri 14:00–22:00". */
+  hours?: string;
   photos: ShopPhoto[];
   /** Live mode: the account that owns this store. Absent on samples and in the browser-only demo. */
   ownerUserId?: string;

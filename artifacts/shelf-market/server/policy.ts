@@ -173,7 +173,7 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
     case "setShelfSuspended": {
       const t = find(s.tokens, str(a0, "shelf"), "Shelf");
       canManageShop(s, t.shopId, actor);
-      run(() => ops.setShelfSuspended(s, t.id, !!args[1], String(args[2] ?? "")));
+      run(() => ops.setShelfSuspended(s, t.id, !!args[1], String(args[2] ?? ""), me?.isAdmin && !ownsShop(s, t.shopId, me) ? "admin" : "owner"));
       break;
     }
 

@@ -28,7 +28,9 @@ export function viewFor(s: State, me: Me | null, principal: string, saved: strin
     contracts,
     invoices: s.invoices.filter((i) => contractIds.has(i.contractId)),
     listings: s.listings.filter((l) => visibleShops.has(l.shopId) && (l.status === "active" || party(l.shopId, l.holderId))),
-    orders: s.orders.filter((o) => party(o.shopId, o.holderId) || (o.buyerId && mine.has(o.buyerId))),
+    // Stores and makers see their orders, but never which visitor or account placed them.
+    orders: s.orders.filter((o) => party(o.shopId, o.holderId) || (o.buyerId && mine.has(o.buyerId)))
+      .map((o) => (o.buyerId && mine.has(o.buyerId) ? o : { ...o, buyerId: undefined })),
     ledger: s.ledger.filter((e) => party(e.shopId, e.holderId)),
     notifications: s.notifications.filter((n) => n.userIds?.some((u) => mine.has(u))),
     requests: s.requests.filter((r) => me && r.userId === me.id),

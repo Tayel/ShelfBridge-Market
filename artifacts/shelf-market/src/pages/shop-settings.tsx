@@ -21,7 +21,7 @@ export default function ShopSettings() {
 function Form({ shop }: { shop: Shop }) {
   const session = useSession();
   const { act, error, pending } = useAct();
-  const [info, setInfo] = useState({ name: shop.name, address: shop.address, registration: shop.registration, ownerName: shop.ownerName, price: shop.price, floorNote: shop.floorNote, city: shop.city });
+  const [info, setInfo] = useState({ name: shop.name, address: shop.address, registration: shop.registration, ownerName: shop.ownerName, price: shop.price, floorNote: shop.floorNote, city: shop.city, hours: shop.hours ?? "" });
   const [shelf, setShelf] = useState<ShelfSpec>(shop.shelf);
   const [terms, setTerms] = useState<RentalTerms>(shop.terms);
   const [photos, setPhotos] = useState(shop.photos);
@@ -49,6 +49,7 @@ function Form({ shop }: { shop: Shop }) {
             <Field label="Store name"><input disabled={ro} value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} className={inputCls} data-testid="input-name" /></Field>
             <Field label="Owner name"><input disabled={ro} value={info.ownerName} onChange={(e) => setInfo({ ...info, ownerName: e.target.value })} className={inputCls} data-testid="input-owner" /></Field>
             <Field label="Address"><input disabled={ro} value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} className={inputCls} data-testid="input-address" /></Field>
+            <Field label="Opening hours" hint="Shown to makers, e.g. Sat–Thu 9:00–22:00, Fri 14:00–22:00"><input disabled={ro} maxLength={120} value={info.hours} onChange={(e) => setInfo({ ...info, hours: e.target.value })} className={inputCls} data-testid="input-hours" /></Field>
             <Field label="Registration no." hint={LIVE ? "Your trade licence or commercial registration number. Only you and the InRaf team see it." : "Demo value only — don't enter real registration data."}><input disabled={ro} value={info.registration} onChange={(e) => setInfo({ ...info, registration: e.target.value })} className={inputCls} data-testid="input-registration" /></Field>
           </div>
         </Card>

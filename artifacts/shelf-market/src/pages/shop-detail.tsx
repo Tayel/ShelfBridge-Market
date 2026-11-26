@@ -111,7 +111,7 @@ export default function ShopDetail() {
     <Shell title={shop.name} back="/explore">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><B.icon className="h-4 w-4" />{B.label} · {shop.city}, {countryName(shop.country)}</p>
+          <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><B.icon className="h-4 w-4" />{B.label} · {shop.city}, {countryName(shop.country)}{shop.hours ? ` · Open ${shop.hours}` : ""}</p>
           <h1 className="font-display mt-1 text-4xl font-bold md:text-5xl" data-testid="text-shop-name">{shop.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
             {rating ? <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 fill-foreground" /><b>{rating.overall.toFixed(2)}</b> · <a href="#reviews" className="underline">{rating.count} review{rating.count === 1 ? "" : "s"}</a></span> : <span className="font-semibold text-primary">New listing</span>}
