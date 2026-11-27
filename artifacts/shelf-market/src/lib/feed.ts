@@ -7,8 +7,12 @@
 import type { State } from "./types";
 import { nowIso, today } from "./util";
 
-/** v2 adds `applications` (the "I have a shop" journey) and each shop's venue and categories. v1 readers ignore them. */
-export const FEED_SCHEMA = "inraf.shelf-market.compliance-feed/v2";
+/**
+ * v2 adds `applications` (the "I have a shop" journey) and each shop's venue and categories.
+ * v3 (27 Nov 2026) adds `payments` (rent and deposits paid directly to the store, with method and confirmation) and,
+ * on each sale, whether it was paid at the store's till and how the store paid the maker. Older readers ignore them.
+ */
+export const FEED_SCHEMA = "inraf.shelf-market.compliance-feed/v3";
 
 /** `live`: the hosted server builds it, so it is labelled live and includes stores still waiting for approval (they need screening most). */
 export function buildComplianceFeed(s: State, opts: { live?: boolean } = {}) {
@@ -55,7 +59,20 @@ export function buildComplianceFeed(s: State, opts: { live?: boolean } = {}) {
       id: o.id, ref: o.ref, at: o.capturedAt ?? o.createdAt, shopId: o.shopId, makerId: o.holderId, listingId: o.listingId,
       contractRef: contractOf(o.contractId)?.ref ?? null, product: o.productName, qty: o.qty, unit: o.unit, gross: o.gross, net: o.net,
       payment: o.payment, payout: o.payout, settledAt: o.settledAt ?? null, refund: o.refund?.status ?? null, customer: o.customerLabel,
+      channel: o.channel ?? "online", settlementMethod: o.settlement?.method ?? null, settlementRef: o.settlement?.reference ?? null,
     })),
+    /** Rent and deposit invoices, paid directly to the store owner: what the renter reported and what the store confirmed. */
+    payments: s.invoices.map((i) => {
+      const c = contractOf(i.contractId);
+      return {
+        id: i.id, ref: i.ref, contractRef: c?.ref ?? null, shopId: c?.shopId ?? null, makerId: c?.holderId ?? null, kind: i.kind, label: i.label,
+        total: i.total, lateFee: i.lateFee ?? 0, dueDate: i.dueDate,
+        status: i.voidedAt ? "void" : i.paidAt ? "paid" : i.dueDate < today() ? "overdue" : "due",
+        reportedAt: i.reported?.at ?? null, reportedPaidOn: i.reported?.paidOn ?? null, reportedMethod: i.reported?.method ?? null,
+        confirmedAt: i.paidAt ?? null, method: i.method ?? null, reference: i.paymentRef ?? null, lateFeeWaived: !!i.lateFeeWaived,
+        returned: i.returned ? { at: i.returned.at, amount: i.returned.amount, deductions: i.returned.deductions, method: i.returned.method } : null,
+      };
+    }),
     settlements: s.ledger.filter((e) => e.financial).map((e) => ({ id: e.id, at: e.at, type: e.type, amount: e.amount, shopId: e.shopId, makerId: e.holderId, orderId: e.orderId ?? null, memo: e.memo })),
   };
 }
