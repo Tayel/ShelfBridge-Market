@@ -11,6 +11,7 @@ import { useAct } from "@/hooks/use-act";
 import { listingBlockReason, reservedQty, shelfBlockReason, shelfLabel } from "@/lib/selectors";
 import { CUSTOMER_SERVICE_FEE, categoryLabel, countryName } from "@/lib/data";
 import { round2, fmtDate } from "@/lib/util";
+import { OFFLINE } from "@/components/money-offline";
 
 type Step = "browse" | "qty" | "review" | "authorized" | "failed" | "done";
 
@@ -118,7 +119,20 @@ export default function Catalog() {
               </Card>
             )}
 
-            {step === "review" && l && (
+            {step === "review" && l && OFFLINE && (
+              <Card testId="card-pay-at-till">
+                <p className="font-display text-xl font-bold">Pay at the till</p>
+                <dl className="mt-3 space-y-1.5 text-sm" data-testid="list-totals">
+                  <div className="flex justify-between"><dt>{qty} × {l.name}</dt><dd className="tabular-nums">{usd(subtotal)}</dd></div>
+                  <div className="flex justify-between text-muted-foreground"><dt>Tax {l.taxRate}% (where it applies)</dt><dd className="tabular-nums">{usd(tax)}</dd></div>
+                  <div className="flex justify-between border-t border-border pt-2 font-display text-lg font-bold"><dt>To pay</dt><dd className="tabular-nums" data-testid="text-total">{usd(round2(subtotal + tax))}</dd></div>
+                </dl>
+                <p className="mt-3 rounded-2xl bg-muted p-3 text-sm">Take the product to the counter at <b>{shop.name}</b> and pay there. Show this screen if it helps: product <b>{l.sku}</b>, {qty} unit(s). Online payment on InRaf isn't open yet.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Sold by the maker renting this shelf; {shop.name} takes the payment and records the sale for them. For returns, ask the store.</p>
+                <GhostButton className="mt-4 w-full" onClick={() => setStep("qty")} data-testid="button-back-qty">Change quantity</GhostButton>
+              </Card>
+            )}
+            {step === "review" && l && !OFFLINE && (
               <Card>
                 <p className="font-display text-xl font-bold">Review</p>
                 <dl className="mt-3 space-y-1.5 text-sm" data-testid="list-totals">

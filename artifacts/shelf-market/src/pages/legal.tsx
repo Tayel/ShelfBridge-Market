@@ -4,7 +4,6 @@ import { Mail, MapPin, ShieldCheck, Store, Users } from "lucide-react";
 import { Shell, PageTitle } from "@/components/shell";
 import { Card } from "@/components/kit";
 import { COMPANY, TERMS_UPDATED } from "@/lib/legal";
-import { PLATFORM_COMMISSION_PCT, CUSTOMER_SERVICE_FEE } from "@/lib/data";
 
 const operator = `${COMPANY.operator}${COMPANY.registeredIn ? `, registered in ${COMPANY.registeredIn}` : ""}${COMPANY.address ? `, ${COMPANY.address}` : ""}`;
 const Mailto = () => <a href={`mailto:${COMPANY.email}`} className="text-primary underline">{COMPANY.email}</a>;
@@ -41,9 +40,10 @@ export function Terms() {
         <p>InRaf is not the seller of the products on a shelf: each product is sold by the maker who rents that shelf. The rental contract is between the store owner and the maker; InRaf provides the platform, the contract template and approvals.</p>
         <p>A <b>shelf token</b> is a record of a maker’s right to use a shelf under a contract. It is <b>not money, not crypto and not an investment</b>, and it gives no share in InRaf or in anyone else’s profits.</p>
       </Section>
-      <Section n={3} title="Payments are still simulated">
-        <p>Today, rent, sales, refunds and payouts are recorded on InRaf but <b>no money moves</b> and no card is charged. When real payments start, they will be handled by a licensed payment provider, and we will tell you before anything changes.</p>
-        <p>Fees when payments go live, as shown today: InRaf’s commission is {PLATFORM_COMMISSION_PCT}% of each product sale, and shoppers pay a disclosed service fee of ${CUSTOMER_SERVICE_FEE.toFixed(2)} per order. Rent and any share of sales go to the store owner as set in the contract.</p>
+      <Section n={3} title="How payments work">
+        <p><b>InRaf does not take, hold or transfer money.</b> Makers pay rent and deposits directly to the store owner (by bank transfer or another method they agree) and tell the store on InRaf; the store owner confirms receipt and InRaf issues a receipt. Shoppers pay for products at the store’s till, the store records each sale on InRaf, and the store pays each maker its part every month, within the period set in the contract, and records that payment.</p>
+        <p>While payments work this way, <b>InRaf charges no commission or service fee</b>. If InRaf introduces online payments or fees, it will tell you in advance and ask you to agree to the updated terms.</p>
+        <p>Each side is responsible for the payments it owes and for keeping its own payment records and receipts. InRaf’s records show what each side has reported and confirmed; they are not a bank statement.</p>
       </Section>
       <Section n={4} title="Your account">
         <ul>
@@ -167,7 +167,7 @@ export function About() {
         <Card>
           <Users className="h-6 w-6 text-primary" />
           <p className="font-display mt-2 font-bold">For makers</p>
-          <p className="mt-1 text-sm text-muted-foreground">Rent a shelf near your customers, stock it and sell by QR. You keep your own sales, minus a disclosed {PLATFORM_COMMISSION_PCT}% commission.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Rent a shelf near your customers and stock it. Shoppers pay at the store’s till and the store pays you for every sale; InRaf charges no commission while payments are made directly.</p>
           <Link href="/start?as=holder" className="mt-3 inline-block text-sm font-semibold text-primary underline">Find a shelf</Link>
         </Card>
         <Card>
@@ -183,7 +183,7 @@ export function About() {
         <Card className="md:col-span-2">
           <p className="font-display text-xl font-bold">Talk to us</p>
           <p className="mt-2 flex items-center gap-2 text-sm"><Mail className="h-4 w-4 text-primary" /><Mailto /></p>
-          <p className="mt-3 text-xs text-muted-foreground">Payments on InRaf are still simulated: accounts, stores and contracts are real, but no money moves yet. Read the <Link href="/terms" className="underline">Terms</Link> and the <Link href="/privacy" className="underline">Privacy Policy</Link>.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Accounts, stores, contracts and records on InRaf are real. Money is paid directly between makers, stores and shoppers; InRaf records it but never holds it. Read the <Link href="/terms" className="underline">Terms</Link> and the <Link href="/privacy" className="underline">Privacy Policy</Link>.</p>
         </Card>
       </div>
     </Shell>

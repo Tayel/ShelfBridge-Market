@@ -15,8 +15,8 @@ const DEMO_FAQ: [string, string][] = [
 const LIVE_FAQ: [string, string][] = [
   ["Who sells me the product?", "The token holder renting that shelf. The store provides the space; pricing, stock and product quality are the holder's responsibility."],
   ["What does the total include?", "Item price, an illustrative tax amount and a disclosed platform service fee, in USD."],
-  ["Am I charged?", "Not yet. InRaf is open for stores and makers, but payments are still simulated: checking out reserves the item and records the order, and no card is charged."],
-  ["How do refunds work?", "Open your receipt and request a refund. The InRaf team reviews it. Approved refunds are full and happen once; usable returned goods may be restocked."],
+  ["How do I pay?", "At the store's till, as you would for anything else in the shop. Scan the shelf's QR code to see the products, prices and the maker behind them."],
+  ["How do refunds work?", "Ask the store where you bought it. The store gives the refund and records it on InRaf, so the maker is told."],
   ["Is my data shared?", "Store owners and makers sign in with their email. We show your name to the people you deal with; contracts, orders and earnings are only visible to the parties involved and the InRaf team. Shoppers don't need an account, and we never ask for card details."],
 ];
 

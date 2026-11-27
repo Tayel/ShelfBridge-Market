@@ -9,6 +9,17 @@
  */
 import type { Contract, ContractModel, ContractVersion } from "./types";
 import { categoryLabel, countryName } from "./data";
+import { SETTLEMENT_DAYS } from "./payments";
+
+/**
+ * Template editions. Each issued offer records the edition it was made with, so an offer or an accepted agreement
+ * always shows (and fingerprints) the exact text that was offered.
+ *  1 — 26 Nov 2026: payments through InRaf.
+ *  2 — 27 Nov 2026: InRaf doesn't move money; rent is paid directly to the Shop Owner and the store pays the
+ *      Token Holder monthly for sales made at its till, all recorded on InRaf.
+ */
+export const CURRENT_TEMPLATE = 2;
+export const templateOf = (v: Pick<ContractVersion, "offer">) => (v.offer ? v.offer.template ?? 1 : CURRENT_TEMPLATE);
 
 export interface Clause { n: number; title: string; paras: string[] }
 export interface Agreement {
@@ -72,6 +83,7 @@ export function buildAgreement(c: Pick<Contract, "ref" | "model">, v: ContractVe
     : `a monthly fee of ${money(t.monthlyRent)}`;
   const offerNo = offerNoOf(c, v);
   const premises = `${s.shelf.label} at ${s.store.name}, ${s.store.address}, ${country}`;
+  const direct = templateOf(v) >= 2;
 
   const summary: [string, string][] = [
     ["Offer number", offerNo],
@@ -86,6 +98,7 @@ export function buildAgreement(c: Pick<Contract, "ref" | "model">, v: ContractVe
     ["Tax", `${t.taxRate}% (illustrative; the rate in force applies)`],
     ["Security deposit", t.deposit > 0 ? money(t.deposit) : "None"],
     ["Late payment", `${t.lateFeePct}% of the overdue amount after ${t.graceDays} days' grace`],
+    ...(direct ? [["How payments are made", `Directly between the Parties (bank transfer or another agreed method), recorded and confirmed on InRaf. Sales are paid at the shop's till and settled with the Token Holder monthly, within ${SETTLEMENT_DAYS} days after each month ends.`] as [string, string]] : []),
     ["Notice to end early", `${notice} days`],
     ["Governing law", t.governingLaw ?? `The laws of ${country}`],
   ];
@@ -117,17 +130,21 @@ export function buildAgreement(c: Pick<Contract, "ref" | "model">, v: ContractVe
   add("Fees and payment",
     `In return for the right in clause 2, the Token Holder pays ${fees}.`,
     !consign && t.monthlyRent > 0 && `The monthly fee is invoiced through InRaf for each month of the Term and is due within 5 days after the start of that month. Tax at the rate in force is added where it applies (currently shown as ${t.taxRate}%, for illustration).`,
-    pct > 0 && `The ${consign ? "commission" : "share of sales"} is calculated on each sale recorded on InRaf and deducted before the Token Holder's payout. Each Party can see every sale and deduction in its InRaf account.`,
-    `All payments are made through InRaf only. Neither Party may ask for or accept payment outside InRaf for anything covered by this Agreement. No other fee, charge or deduction applies unless both Parties agree it in writing through InRaf.`,
+    pct > 0 && (direct
+      ? `The ${consign ? "commission" : "share of sales"} is calculated on each sale recorded on InRaf and kept by the Shop Owner when it settles with the Token Holder under clause 10. Each Party can see every sale and deduction in its InRaf account.`
+      : `The ${consign ? "commission" : "share of sales"} is calculated on each sale recorded on InRaf and deducted before the Token Holder's payout. Each Party can see every sale and deduction in its InRaf account.`),
+    direct
+      ? `The Token Holder pays the Shop Owner directly, by bank transfer or another method the Parties agree, and tells the Shop Owner on InRaf when it has paid. The Shop Owner confirms on InRaf when the money is received, and InRaf issues a receipt. A payment counts as made on the date the Token Holder paid, if the money then arrives. InRaf does not receive, hold or transfer any money under this Agreement. No other fee, charge or deduction applies unless both Parties agree it in writing through InRaf, and neither Party may ask for a payment that is not recorded on InRaf.`
+      : `All payments are made through InRaf only. Neither Party may ask for or accept payment outside InRaf for anything covered by this Agreement. No other fee, charge or deduction applies unless both Parties agree it in writing through InRaf.`,
     `If an amount is not paid within ${t.graceDays} days of its due date, a late fee of ${t.lateFeePct}% of the overdue amount applies, once per invoice. The late fee is a fair estimate of the Shop Owner's administrative cost and is not a penalty or interest.`,
     `If the Token Holder disputes an invoice in good faith, it must say so through InRaf before the due date and pay any undisputed part. No late fee applies to the disputed part while it is being resolved.`);
   add("Security deposit",
-    t.deposit > 0 ? `The Token Holder pays a security deposit of ${money(t.deposit)} on or before the start date. It is held against unpaid amounts due under this Agreement and the cost of repairing damage to the Premises caused by the Token Holder, beyond fair wear and tear.`
+    t.deposit > 0 ? `The Token Holder pays a security deposit of ${money(t.deposit)}${direct ? " to the Shop Owner, in the way set out in clause 4," : ""} on or before the start date. It is held against unpaid amounts due under this Agreement and the cost of repairing damage to the Premises caused by the Token Holder, beyond fair wear and tear.`
       : `No security deposit is payable under this Agreement.`,
     t.deposit > 0 && `Within ${DEPOSIT_RETURN_DAYS} days after this Agreement ends and the Premises are cleared, the deposit is returned in full, less any deductions allowed by this clause. Every deduction must be itemised, explained and supported by evidence (such as photos or invoices) on InRaf. The Token Holder may dispute a deduction under clause 17.`,
     t.deposit > 0 && `The deposit is not a payment of fees and cannot be used by the Token Holder to pay the last month's fee unless the Shop Owner agrees.`);
   add("Shop Owner's obligations",
-    `The Shop Owner will: (a) make the Premises available in the agreed condition on the start date; (b) give the Token Holder and its staff reasonable access to stock and arrange the Premises during the shop's opening hours, by arrangement through InRaf; (c) keep the Premises installed, safe, clean and properly lit; (d) take reasonable care of the Token Holder's goods while they are in the shop; (e) not sell, move or remove the Token Holder's goods except as allowed by this Agreement or with its consent; (f) confirm deliveries, record sales and handle store requests accurately through InRaf; (g) report any loss, theft, damage or incident affecting the goods or the Premises through InRaf within ${INCIDENT_REPORT_HOURS} hours of becoming aware of it; and (h) hold the business registrations and permits needed to run the shop.`,
+    `The Shop Owner will: (a) make the Premises available in the agreed condition on the start date; (b) give the Token Holder and its staff reasonable access to stock and arrange the Premises during the shop's opening hours, by arrangement through InRaf; (c) keep the Premises installed, safe, clean and properly lit; (d) take reasonable care of the Token Holder's goods while they are in the shop; (e) not sell, move or remove the Token Holder's goods except as allowed by this Agreement or with its consent; (f) confirm deliveries, record sales and handle store requests accurately through InRaf${direct ? ", recording every sale of the Token Holder's goods on the day it is made and paying the Token Holder under clause 10" : ""}; (g) report any loss, theft, damage or incident affecting the goods or the Premises through InRaf within ${INCIDENT_REPORT_HOURS} hours of becoming aware of it; and (h) hold the business registrations and permits needed to run the shop.`,
     consign && `For consignment, the Shop Owner will also display and offer the goods for sale at the prices set by the Token Holder, collect payment through InRaf only, and keep the goods separate and identifiable as the Token Holder's.`);
   add("Token Holder's obligations",
     `The Token Holder will: (a) supply only goods within the permitted categories that are lawful, safe, genuine and correctly labelled for sale in ${country}, with any required licences, certificates and expiry dates; (b) keep its goods within the Premises; (c) set its prices and keep stock, prices and product details up to date on InRaf; (d) remove expired, damaged, recalled or prohibited goods within 48 hours of becoming aware of the problem; (e) follow the shop's reasonable rules on access, safety and conduct notified in advance; (f) pay the amounts due under this Agreement on time; and (g) be responsible for its own taxes, product compliance and obligations to its customers.`,
@@ -142,6 +159,7 @@ export function buildAgreement(c: Pick<Contract, "ref" | "model">, v: ContractVe
     `Each Party is encouraged to carry insurance suitable for its role: the Shop Owner for the premises and public liability, the Token Holder for its goods and product liability.`);
   add(consign ? "Goods, sales, stock and records" : "Sales, stock and records",
     `Ownership of the goods stays with the Token Holder at all times until they are sold to a customer. ${consign ? "The Shop Owner holds them as custodian and has no right to keep them against any claim." : "The Shop Owner has no right to keep the goods against any claim."}`,
+    direct && `Shoppers pay for the Token Holder's goods at the shop's till, at the prices the Token Holder sets. The Shop Owner holds the sale proceeds for the Token Holder, keeps them separate in its records, and for each calendar month pays the Token Holder the sale price of the goods sold, less any ${consign ? "commission" : "share of sales"} due under clause 4 and less refunds given, within ${SETTLEMENT_DAYS} days after the month ends. The Shop Owner records each payment on InRaf. Tax collected on sales is accounted for as the law of ${country} requires.`,
     `Deliveries, stock counts, sales, refunds, invoices, payments, requests and incidents relating to the Premises are recorded on InRaf and shown to both Parties as they happen. The Parties agree that these records are the shared record of their dealings under this Agreement.`,
     `A Party who believes a record is wrong must say so through InRaf within ${RECORD_DISPUTE_DAYS} days of the record appearing, with its evidence. Records not disputed within that time are treated as accepted, unless there is fraud or obvious error.`,
     `Either Party may ask for a stock count on InRaf. Differences are investigated in good faith; a loss caused by one Party is borne by that Party under clause 9.`);
@@ -173,12 +191,12 @@ export function buildAgreement(c: Pick<Contract, "ref" | "model">, v: ContractVe
   add("Notices and communication",
     `Notices under this Agreement are given in writing through InRaf, which also sends them to the registered email of the receiving Party. A notice is treated as received on the next business day after it is sent. Each Party will keep its contact details up to date.`);
   add("InRaf's role",
-    `InRaf provides the platform on which this Agreement is offered, accepted and recorded, reviews it before it takes effect, and administers invoices, records and notices. InRaf is not a party to this Agreement and does not guarantee either Party's performance. InRaf's Terms of Use apply to each Party's use of the platform. While InRaf's payments are simulated, invoices and receipts are records only and no money moves through InRaf.`);
+    `InRaf provides the platform on which this Agreement is offered, accepted and recorded, reviews it before it takes effect, and administers invoices, records and notices. InRaf is not a party to this Agreement and does not guarantee either Party's performance. InRaf's Terms of Use apply to each Party's use of the platform. ${direct ? "InRaf does not receive, hold or transfer money under this Agreement; payments are made directly between the Parties and recorded on InRaf." : "While InRaf's payments are simulated, invoices and receipts are records only and no money moves through InRaf."}`);
   add("General",
     `This Agreement, with the offer and the records referred to in it, is the entire agreement between the Parties about the Premises and replaces any earlier discussions. Neither Party may transfer its rights or obligations without the other's written consent, which will not be unreasonably refused. If any part of this Agreement is invalid, the rest continues in force, and the Parties will replace the invalid part with a valid one as close as possible to its purpose. A Party's delay in using a right does not waive it.`,
     `The Parties agree to make and accept this Agreement electronically. Acceptance by typing a full name on InRaf, recorded with the time and the document fingerprint, is intended to be each Party's signature. Whether an electronic signature is enforceable is decided by the applicable law; the Parties should take their own legal advice.`);
 
   const title = consign ? "Shelf Consignment Agreement" : "Shelf Rental Agreement";
-  const text = [title, offerNo, ...letter, ...summary.map(([k, x]) => `${k}: ${x}`), ...L.flatMap((c) => [`${c.n}. ${c.title}`, ...c.paras])].join("\n");
+  const text = [title, offerNo, ...(direct ? [`Template ${templateOf(v)}`] : []), ...letter, ...summary.map(([k, x]) => `${k}: ${x}`), ...L.flatMap((c) => [`${c.n}. ${c.title}`, ...c.paras])].join("\n");
   return { title, offerNo, letter, summary, clauses: L, fingerprint: fingerprintOf(text) };
 }

@@ -63,7 +63,12 @@ const inv = async (who) => (await who.state()).invoices.filter((i) => i.contract
 check((await inv(maker)).length > 0 && JSON.stringify(await inv(maker)) === JSON.stringify(await inv(owner)), "both sides see the same invoices");
 check((await inv(maker)).some((i) => i.kind === "deposit"), "the security deposit invoice is issued");
 const dep = (await inv(maker)).find((i) => i.kind === "deposit");
-await maker.act("payInvoice", dep.id);
+check((await maker.act("payInvoice", dep.id)).ok === false, "rent can't be 'paid' on InRaf itself: it's paid to the store");
+check((await owner.act("reportInvoicePaid", dep.id, { paidOn: day(0), method: "Bank transfer" })).ok === false, "only the renter reports paying");
+check((await maker.act("reportInvoicePaid", dep.id, { paidOn: day(0), method: "Bank transfer", reference: "TRF-1" })).ok, "the renter reports paying the deposit by bank transfer");
+check((await notes(owner)).some((n) => n.title === "Payment reported"), "the store owner is asked to confirm");
+check((await maker.act("confirmInvoicePaid", dep.id, {})).ok === false, "the renter can't confirm its own payment");
+await owner.act("confirmInvoicePaid", dep.id, {});
 check((await inv(owner)).find((i) => i.id === dep.id)?.paidAt, "a payment by the renter shows on the store owner's side");
 const tokenId = mc.tokenId;
 const lst = await maker.act("createListing", tokenId, { name: "Pastel de nata box", sku: "PN-1", category: "food", description: "x", color: "#d9a441", origin: "PT", retail: 9, cost: 4, taxRate: 6, batch: "B1", initialQty: 10 });

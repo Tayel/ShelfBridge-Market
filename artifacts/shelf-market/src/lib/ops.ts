@@ -13,7 +13,7 @@ import {
 } from "./selectors";
 import { CUSTOMER_SERVICE_FEE, EXPIRING_WINDOW_DAYS, PLATFORM_COMMISSION_PCT, countryName, demoTaxFor } from "./data";
 import { addDays, addMonths, nowIso, round2, today, uid } from "./util";
-import { OFFER_VALIDITY_CHOICES, OFFER_VALID_DAYS, buildAgreement, longDate, offerNoOf } from "./agreement";
+import { CURRENT_TEMPLATE, OFFER_VALIDITY_CHOICES, OFFER_VALID_DAYS, buildAgreement, longDate, offerNoOf } from "./agreement";
 
 export class DemoError extends Error {}
 function fail(m: string): never { throw new DemoError(m); }
@@ -254,7 +254,7 @@ export function approveContract(s: State, contractId: string, name: string) {
   if (v.adminApproval) fail("Admin approval is already recorded for this version.");
   if (!name.trim()) fail("Type the reviewer name.");
   v.adminApproval = { name: name.trim(), at: nowIso(), via: "ui" };
-  audit(s, ROLE_LABEL.admin, "contract.approved", `${c.ref} v${v.v}`, `Approved by ${name.trim()} (simulated admin)`);
+  audit(s, ROLE_LABEL.admin, "contract.approved", `${c.ref} v${v.v}`, `Approved by ${name.trim()}`);
   const ready = v.offer && !v.holderSig;
   notify(s, "holder", "Contract approved by platform", ready ? `${c.ref} v${v.v} passed InRaf's review. Offer ${v.offer!.no} is ready for you to accept by ${longDate(v.offer!.validUntil)}.` : `${c.ref} v${v.v} passed InRaf's review.`, `/contracts/${c.id}`);
   notify(s, "owner", "Contract approved by platform", ready ? `${c.ref} v${v.v} passed InRaf's review. Your offer is with the renter for acceptance.` : `${c.ref} v${v.v} passed InRaf's review. Issue your formal offer to the renter.`, `/contracts/${c.id}`);
@@ -272,7 +272,8 @@ export function rejectVersion(s: State, contractId: string, reason: string) {
 
 /** Record the formal offer on a version: its number, validity and the fingerprint of the exact text offered. */
 function issueOffer(c: Contract, v: ContractVersion, days: number) {
-  v.offer = { no: offerNoOf(c, v), issuedAt: nowIso(), validUntil: addDays(today(), days), fingerprint: buildAgreement(c, v).fingerprint };
+  v.offer = { no: offerNoOf(c, v), issuedAt: nowIso(), validUntil: addDays(today(), days), fingerprint: "", template: CURRENT_TEMPLATE };
+  v.offer.fingerprint = buildAgreement(c, v).fingerprint;
 }
 export const offerExpired = (v: ContractVersion) => !!v.offer && !v.holderSig && v.offer.validUntil < today();
 /** The Shop Owner still has to issue (or re-issue) the formal offer: never issued, signed before formal offers existed, or expired. */
@@ -419,6 +420,123 @@ export function payInvoice(s: State, invoiceId: string) {
   notify(s, "holder", "Rent receipt ready", `Demo receipt ${inv.receiptRef} for ${inv.label}.`, `/contracts/${c.id}`);
 }
 
+// ---------- payments made outside InRaf (live site) ----------
+const methodOk = (m: unknown) => { const v = String(m ?? "").trim(); if (!v || v.length > 60) fail("Choose how the payment was made."); return v; };
+const refOk = (r: unknown) => String(r ?? "").trim().slice(0, 120);
+
+/** The renter tells the store owner it has paid an invoice directly. The owner then confirms receipt. */
+export function reportInvoicePaid(s: State, invoiceId: string, a: { paidOn: string; method: string; reference?: string }) {
+  const inv = s.invoices.find((i) => i.id === invoiceId) ?? fail("Invoice not found.");
+  const st = invoiceStatus(inv);
+  if (st === "paid") fail("This invoice is already confirmed as paid.");
+  if (st === "void") fail("This invoice was cancelled.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(a.paidOn ?? "") || a.paidOn > today()) fail("Enter the date you paid (not in the future).");
+  const c = contractOf(s, inv.contractId);
+  inv.reported = { at: nowIso(), paidOn: a.paidOn, method: methodOk(a.method), reference: refOk(a.reference) };
+  audit(s, ROLE_LABEL.holder, "payment.reported", inv.ref, `${inv.label}: paid ${a.paidOn} by ${inv.reported.method}${inv.reported.reference ? ` (${inv.reported.reference})` : ""}`);
+  notify(s, "owner", "Payment reported", `${holderOf(s, c.holderId).name} says ${inv.ref} (${inv.label}, ${inv.total.toFixed(2)}) was paid on ${longDate(a.paidOn)} by ${inv.reported.method}. Confirm once you've received it.`, `/contracts/${c.id}`);
+}
+
+/** The store owner confirms it received an invoice's payment. No late fee if the renter paid within the grace period. */
+export function confirmInvoicePaid(s: State, invoiceId: string, a: { method?: string; reference?: string; waiveLateFee?: boolean } = {}) {
+  const inv = s.invoices.find((i) => i.id === invoiceId) ?? fail("Invoice not found.");
+  const st = invoiceStatus(inv);
+  if (st === "paid") fail("This invoice is already confirmed as paid.");
+  if (st === "void") fail("This invoice was cancelled.");
+  const c = contractOf(s, inv.contractId);
+  const v = c.versions.find((x) => x.v === inv.version);
+  const paidOn = inv.reported?.paidOn ?? today();
+  const lateBy = Math.round((Date.parse(paidOn) - Date.parse(inv.dueDate)) / 86_400_000);
+  const fee = a.waiveLateFee || !v || lateBy <= v.snapshot.terms.graceDays ? 0 : round2((inv.total * v.snapshot.terms.lateFeePct) / 100);
+  const method = methodOk(a.method ?? inv.reported?.method);
+  inv.lateFee = fee; inv.lateFeeWaived = !!a.waiveLateFee && lateBy > (v?.snapshot.terms.graceDays ?? 0);
+  inv.paidAt = nowIso(); inv.receiptRef = nextRef(s, "RCPT"); inv.method = method; inv.paymentRef = refOk(a.reference ?? inv.reported?.reference);
+  ledger(s, { type: inv.kind === "deposit" ? "deposit_paid" : "rent_paid", amount: inv.total + fee, invoiceId: inv.id, contractId: c.id, shopId: c.shopId, tokenId: c.tokenId, holderId: c.holderId, memo: `${inv.label}${fee ? ` incl. late fee ${fee}` : ""} — paid directly to the store owner by ${method}${inv.paymentRef ? ` (${inv.paymentRef})` : ""}, confirmed on InRaf` });
+  audit(s, ROLE_LABEL.owner, "payment.confirmed", inv.ref, `Receipt ${inv.receiptRef}: ${method}${inv.paymentRef ? ` ${inv.paymentRef}` : ""}${fee ? `, late fee ${fee}` : ""}${inv.lateFeeWaived ? ", late fee waived" : ""}`);
+  notify(s, "holder", "Payment confirmed", `${shopOf(s, c.shopId).name} confirmed it received ${inv.ref} (${inv.label}). Receipt ${inv.receiptRef}.${fee ? ` A late fee of ${fee.toFixed(2)} was included.` : ""}`, `/contracts/${c.id}`);
+  notify(s, "owner", "Payment recorded", `${inv.ref} (${inv.label}) is recorded as received. Receipt ${inv.receiptRef}.`, `/contracts/${c.id}`);
+}
+
+/** After the agreement ends, the store owner returns the deposit, itemising any deduction (agreement clause 5). */
+export function returnDeposit(s: State, invoiceId: string, a: { amount: number; deductions?: string; method: string; reference?: string }) {
+  const inv = s.invoices.find((i) => i.id === invoiceId) ?? fail("Invoice not found.");
+  if (inv.kind !== "deposit") fail("Only a security deposit can be returned.");
+  if (!inv.paidAt) fail("This deposit was never confirmed as paid.");
+  if (inv.returned) fail("This deposit has already been returned.");
+  const c = contractOf(s, inv.contractId);
+  const end = executedVersion(c)?.snapshot.terms.end ?? "9999-12-31";
+  if (!c.terminatedAt && end > today()) fail("The deposit is returned after the agreement ends.");
+  const amount = round2(Number(a.amount));
+  if (!(amount >= 0) || amount > inv.total) fail(`Return between 0 and ${inv.total.toFixed(2)}.`);
+  const deductions = String(a.deductions ?? "").trim().slice(0, 1000);
+  if (amount < inv.total && deductions.length < 10) fail("Itemise and explain each deduction (the renter can see and dispute it).");
+  inv.returned = { at: nowIso(), amount, deductions, method: methodOk(a.method), reference: refOk(a.reference) };
+  ledger(s, { type: "deposit_returned", amount: -amount, invoiceId: inv.id, contractId: c.id, shopId: c.shopId, tokenId: c.tokenId, holderId: c.holderId, memo: `Deposit returned by ${inv.returned.method}${amount < inv.total ? `; deducted ${round2(inv.total - amount)}: ${deductions}` : " in full"}` });
+  audit(s, ROLE_LABEL.owner, "deposit.returned", inv.ref, `${amount} of ${inv.total}${deductions ? ` — ${deductions}` : ""}`);
+  notify(s, "holder", "Deposit returned", `${shopOf(s, c.shopId).name} returned ${amount.toFixed(2)} of your ${inv.total.toFixed(2)} deposit by ${inv.returned.method}.${amount < inv.total ? ` Deductions: ${deductions}. If you disagree, open an incident within 14 days.` : ""}`, `/contracts/${c.id}`);
+}
+
+/** A shopper paid at the store's till: the store records the sale so stock and the maker's earnings stay in step. */
+export function recordTillSale(s: State, listingId: string, qty: number) {
+  const l = listingOf(s, listingId);
+  if (!Number.isInteger(qty) || qty < 1 || qty > 500) fail("Enter how many units were sold (a whole number).");
+  const reason = listingBlockReason(s, l); if (reason) fail(reason);
+  if (qty > l.available) fail(`Only ${l.available} on the shelf according to InRaf. Count the shelf, or ask the maker to update the stock.`);
+  const c = contractOfToken(s, l.tokenId) ?? fail("No agreement for this shelf.");
+  const subtotal = round2(l.retail * qty);
+  const tax = round2((subtotal * l.taxRate) / 100);
+  const ct = executedVersion(c)?.snapshot.terms;
+  const sharePct = ct && ct.pricing && ct.pricing !== "fixed" ? ct.salesSharePct ?? 0 : 0;
+  const shopShare = round2((subtotal * sharePct) / 100);
+  const id = uid("ord"); const at = nowIso();
+  const o: Order = {
+    id, ref: nextRef(s, "ORD"), listingId: l.id, tokenId: l.tokenId, shopId: l.shopId, holderId: l.holderId, contractId: c.id,
+    productName: l.name, sku: l.sku, qty, unit: l.retail, subtotal, tax, taxRate: l.taxRate, serviceFee: 0, commission: 0, gross: round2(subtotal + tax),
+    net: round2(subtotal - shopShare), shopShare, sharePct, payment: "captured", payout: "pending", simRef: `TILL-${String(s.seq).padStart(5, "0")}`,
+    customerLabel: "Paid at the store", createdAt: at, authorizedAt: at, capturedAt: at, stockDeducted: true, channel: "till",
+  };
+  s.orders.push(o);
+  l.available -= qty; l.sold += qty; l.updatedAt = at;
+  const t = tokenOf(s, l.tokenId);
+  ledger(s, { type: "till_sale", amount: o.gross, orderId: id, shopId: o.shopId, tokenId: o.tokenId, holderId: o.holderId, listingId: l.id, memo: `${qty} × ${l.name} paid at the store's till; the store collected ${o.gross.toFixed(2)} incl. tax` });
+  if (tax) ledger(s, { type: "tax_collected", amount: tax, orderId: id, shopId: o.shopId, tokenId: o.tokenId, holderId: o.holderId, listingId: l.id, memo: `Tax ${l.taxRate}% collected by the store at the till` });
+  if (shopShare) ledger(s, { type: "shop_share", amount: shopShare, orderId: id, shopId: o.shopId, tokenId: o.tokenId, holderId: o.holderId, listingId: l.id, memo: `Store's ${sharePct}% share, kept by the store` });
+  ledger(s, { type: "holder_payable", amount: o.net, orderId: id, shopId: o.shopId, tokenId: o.tokenId, holderId: o.holderId, listingId: l.id, memo: "Due from the store to the maker at the monthly settlement" });
+  audit(s, ROLE_LABEL.owner, "sale.recorded", o.ref, `${qty} × ${l.sku} at the till; stock −${qty}`);
+  notify(s, "holder", "Sale at the store", `${qty} × ${l.name} sold at ${shopOf(s, l.shopId).name} (${o.ref}). ${o.net.toFixed(2)} is due to you from the store.`, "/dashboard?tab=sales");
+  if (l.available === 0) notify(s, "holder", "Sold out", `${l.name} is sold out on ${shelfLabel(shopOf(s, l.shopId), t.slot)}.`, `/shelf/${t.id}`);
+  else if (l.available <= 3) notify(s, "holder", "Low stock", `${l.name}: only ${l.available} left.`, `/shelf/${t.id}`);
+  return id;
+}
+
+/** The store refunded a till sale. */
+export function recordTillRefund(s: State, orderId: string, restock: boolean, note: string) {
+  const o = orderOf(s, orderId);
+  if (o.channel !== "till") fail("Only sales recorded at the till can be refunded by the store.");
+  if (o.payment !== "captured") fail("This sale was already refunded.");
+  if (!note.trim()) fail("Give the reason for the refund.");
+  o.refund = { status: "requested", reason: note.trim(), requestedAt: nowIso() };
+  decideRefund(s, o.id, true, restock, note.trim(), "owner");
+}
+
+/** The store pays the maker for its till sales and records it. */
+export function settleWithMaker(s: State, tokenId: string, a: { method: string; reference?: string; by: string }) {
+  const t = tokenOf(s, tokenId);
+  const due = s.orders.filter((o) => o.tokenId === t.id && o.channel === "till" && o.payment === "captured" && o.payout === "pending");
+  if (!due.length) fail("Nothing is due to the maker for this shelf.");
+  const method = methodOk(a.method); const reference = refOk(a.reference);
+  const total = round2(due.reduce((x, o) => x + o.net, 0));
+  for (const o of due) {
+    o.payout = "settled"; o.settledAt = nowIso(); o.settlement = { method, reference, by: a.by };
+    ledger(s, { type: "payout_settled", amount: o.net, orderId: o.id, shopId: o.shopId, tokenId: o.tokenId, holderId: o.holderId, listingId: o.listingId, memo: `Paid by the store to the maker by ${method}${reference ? ` (${reference})` : ""}` });
+  }
+  const shop = shopOf(s, t.shopId);
+  audit(s, ROLE_LABEL.owner, "settlement.paid", shelfLabel(shop, t.slot), `${total} to ${holderOf(s, t.holderId).name} for ${due.length} sale(s) by ${method}${reference ? ` ${reference}` : ""}`);
+  notify(s, "holder", "Payment from the store", `${shop.name} paid you ${total.toFixed(2)} for ${due.length} sale(s) by ${method}${reference ? ` (ref. ${reference})` : ""}. If it hasn't arrived, open an incident on the shelf.`, "/dashboard?tab=money");
+  notify(s, "owner", "Settlement recorded", `You recorded paying ${holderOf(s, t.holderId).name} ${total.toFixed(2)} for ${due.length} sale(s).`, "/owner-dashboard?tab=money");
+  return total;
+}
+
 export function setShelfSuspended(s: State, tokenId: string, on: boolean, note: string, actor: Role = "admin") {
   const t = tokenOf(s, tokenId);
   if (!!t.suspended === on) fail(on ? "Shelf already suspended." : "Shelf is not suspended.");
@@ -552,7 +670,7 @@ export function restockListing(s: State, id: string, qty: number) {
   if (used + qty > shop.shelf.capacity) fail(`Capacity ${shop.shelf.capacity} units; only ${Math.max(0, shop.shelf.capacity - used)} free.`);
   l.available += qty; l.initialQty += qty; l.updatedAt = nowIso();
   movement(s, l, "restock", qty, { by: "holder", byName: holderOf(s, l.holderId).name, source: "maker-reported", note: "Added by the maker" });
-  audit(s, ROLE_LABEL.holder, "product.restocked", l.sku, `+${qty} units (simulated)`);
+  audit(s, ROLE_LABEL.holder, "product.restocked", l.sku, `+${qty} units`);
 }
 
 // ---------- orders & payments ----------
@@ -649,7 +767,7 @@ export function requestRefund(s: State, orderId: string, reason: string) {
   notify(s, "holder", "Refund requested", `${o.ref} (${o.productName}).`, "/dashboard?tab=orders");
 }
 
-export function decideRefund(s: State, orderId: string, approve: boolean, restock: boolean, note: string) {
+export function decideRefund(s: State, orderId: string, approve: boolean, restock: boolean, note: string, actor: Role = "admin") {
   const o = orderOf(s, orderId);
   if (!o.refund || o.refund.status !== "requested") fail("No open refund request on this order.");
   if (o.payment === "refunded") fail("Already refunded.");
@@ -686,9 +804,9 @@ export function decideRefund(s: State, orderId: string, approve: boolean, restoc
   } else {
     l.returned += o.qty;
   }
-  audit(s, ROLE_LABEL.admin, "refund.approved", o.ref, `Full refund; ${restock ? `${o.qty} usable unit(s) restocked` : "goods not restocked"}`);
-  notify(s, "customer", "Refund approved", `${o.ref} fully refunded (simulated).`, `/orders/${o.id}`);
-  notify(s, "holder", "Refund processed", `${o.ref} refunded${restock ? "; stock returned to shelf" : ""}.`, "/dashboard?tab=orders");
+  audit(s, ROLE_LABEL[actor], "refund.approved", o.ref, `Full refund; ${restock ? `${o.qty} usable unit(s) restocked` : "goods not restocked"}`);
+  if (o.channel !== "till") notify(s, "customer", "Refund approved", `${o.ref} fully refunded (simulated).`, `/orders/${o.id}`);
+  notify(s, "holder", "Refund processed", `${o.ref} refunded${o.channel === "till" ? " at the store" : ""}${restock ? "; stock returned to shelf" : ""}.${o.channel === "till" && o.payout === "settled" ? ` You were already paid for it, so ${o.net.toFixed(2)} is owed back to the store.` : ""}`, "/dashboard?tab=orders");
 }
 
 export function requestPayout(s: State, orderId: string, actor: Role) {

@@ -13,8 +13,8 @@ const ICON: Record<OpportunityId, LucideIcon> = { airport: Plane, mall: Shopping
 const SHORT: Record<OpportunityId, string> = { airport: "Airport duty-free", mall: "Shopping malls", independent: "Local boutiques", fashion: "Fashion space", outlet: "Outlet & near-date", "expiring-rentals": "Freeing up soon" };
 const JOURNEY = ["Choose channel", "Select product", "Verify & apply", "Go live"];
 const ROADMAP = [
-  { t: "Offer & owner", d: "You send a request or an offer; the store owner accepts or counters." },
-  { t: "InRaf check & contract", d: "InRaf reviews it, then you both sign the contract." },
+  { t: "Request & formal offer", d: "You send a request or your own terms; the store owner replies with a formal rental offer addressed to you." },
+  { t: "InRaf review & acceptance", d: "InRaf reviews it, you accept it by signing, and you both get a written confirmation." },
   { t: "Shelf live", d: "You get your shelf ID and QR code, stock it and start selling." },
 ];
 

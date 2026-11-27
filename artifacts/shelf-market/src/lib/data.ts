@@ -125,7 +125,7 @@ export const PRODUCT_JOURNEY: Record<ProductId, {
         ["What if stock reaches its date on my shelf?", "Batches must expire within 45 days and are listed with their date. The factory collects anything unsold before it expires; sales after the date are flagged to compliance."],
         ["Who sets the discount?", "The factory sets the offer price and the usual price. Shoppers see both, so the saving is clear."],
         ["Do I need a fridge?", "Only for chilled goods. Most near-date stock is packaged food and drinks that keep on an ordinary shelf."],
-        ["How do I get paid?", "Monthly rent, a share of each sale, or both — you choose. Payments are still simulated on InRaf, so no money moves yet."],
+        ["How do I get paid?", "Monthly rent, a share of each sale, or both — you choose. Makers pay you directly and you confirm each payment on InRaf."],
       ],
       cta: "List your shop for About to Expire",
     },
@@ -168,7 +168,7 @@ export const PRODUCT_JOURNEY: Record<ProductId, {
       faq: [
         ["Does it have to be airside?", "Any shop inside an airport terminal works — before or after security. Your airport's own retail rules still apply."],
         ["Who decides what goes on the shelf?", "Each maker proposes their own products; you approve every product before it goes on sale."],
-        ["How do I get paid?", "You receive the rent for each section (and a share of each sale if you choose). Each maker is paid only for their own sales. Payments are still simulated on InRaf."],
+        ["How do I get paid?", "You receive the rent for each section (and a share of each sale if you choose). Each maker is paid only for their own sales. Payments are made directly and recorded on InRaf."],
         ["What about duty-free rules?", "InRaf doesn't handle customs or duty-free licensing. Check with your airport operator."],
       ],
       cta: "List your airport shop",

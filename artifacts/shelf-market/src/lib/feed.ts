@@ -15,7 +15,7 @@ export function buildComplianceFeed(s: State, opts: { live?: boolean } = {}) {
   const contractOf = (id: string) => s.contracts.find((c) => c.id === id);
   return {
     schema: FEED_SCHEMA,
-    source: opts.live ? "InRaf Shelf Market (live — payments simulated)" : "InRaf Shelf Market (demo — simulated money)",
+    source: opts.live ? "InRaf Shelf Market (live — payments made directly between parties, recorded on InRaf)" : "InRaf Shelf Market (demo — simulated money)",
     generatedAt: nowIso(),
     currency: "USD",
     shops: s.shops.filter((x) => opts.live || x.status !== "pending" || x.seeded).map((x) => ({

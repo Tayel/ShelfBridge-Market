@@ -35,12 +35,7 @@ export function Logo() {
 
 export function DemoBadge() {
   const { live } = useSession();
-  if (live) return (
-    <Link href="/guide" data-testid="badge-demo" title="Accounts and data are real. Payments, signatures and settlements are still simulated."
-      className="hidden rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground ring-1 ring-amber-300/60 sm:inline-flex">
-      Live · payments simulated
-    </Link>
-  );
+  if (live) return null;
   return (
     <Link href="/guide" data-testid="badge-demo" title="Demo only. Nothing is real, no money moves."
       className="hidden rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground ring-1 ring-amber-300/60 sm:inline-flex">
@@ -141,7 +136,7 @@ export function Shell({ children, title, back, wide }: { children: ReactNode; ti
         {children}
       </motion.main>
       <footer className="border-t border-border/60 px-4 py-6 text-center text-xs text-muted-foreground">
-        {live ? "Accounts and listings are real and shared. Payments, e-signatures and settlements are simulated: no money moves. Amounts in USD;" : "Browser-only demo. Amounts in demo USD;"} {" "}tax and fees are illustrative, not advice for any jurisdiction.{live ? " " : " No real payments, signatures, identity checks, email or SMS. "}
+        {live ? "Amounts in USD. Rent is paid directly to stores and shoppers pay at the store's till; InRaf records payments but never holds money. Tax rates shown are a guide, not tax advice." : "Browser-only demo. Amounts in demo USD; tax and fees are illustrative, not advice for any jurisdiction."}{live ? " " : " No real payments, signatures, identity checks, email or SMS. "}
         <Link href="/guide" className="underline" data-testid="link-footer-guide">{live ? "How InRaf works" : "Read the demo guide"}</Link>
         {" · "}<Link href="/about" className="underline" data-testid="link-footer-about">About & contact</Link>
         {" · "}<Link href="/terms" className="underline" data-testid="link-footer-terms">Terms</Link>

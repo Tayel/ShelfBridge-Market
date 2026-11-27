@@ -43,8 +43,8 @@ let os = await owner.state();
 check(os.listings.filter((l) => l.shopId === shopId && l.status === "pending").length === 2, "the owner sees both products waiting for approval");
 await owner.act("decideListing", soap.id, true, ""); await owner.act("decideListing", dates.id, true, "");
 await maker.act("activateListing", soap.id); await maker.act("activateListing", dates.id);
-const o1 = await shopper.act("authorize", soap.id, 3, false); await shopper.act("capture", o1.id);
-const o2 = await shopper.act("authorize", dates.id, 2, false); await shopper.act("capture", o2.id);
+const o1 = await owner.act("recordTillSale", soap.id, 3);
+const o2 = await owner.act("recordTillSale", dates.id, 2);
 const elsewhereOrderCount = (await admin.state()).orders.filter((o) => o.shopId === otherShop).length;
 
 os = await owner.state();
@@ -52,7 +52,7 @@ const myOrders = os.orders.filter((o) => o.shopId === shopId);
 check(myOrders.length === 2 && myOrders.every((o) => o.payment === "captured"), "the owner sees the two paid orders at their store");
 check(myOrders.every((o) => o.shopShare > 0 && o.sharePct === 10), "each order shows the owner's 10% share");
 check(!os.orders.some((o) => o.shopId === otherShop) && elsewhereOrderCount === 0, "the owner sees no orders from other stores");
-check(myOrders.every((o) => /^Customer #/.test(o.customerLabel) && !o.buyerId), "shoppers appear only by customer number, with no visitor or account id");
+check(myOrders.every((o) => o.channel === "till" && !o.buyerId), "till sales carry no shopper identity");
 const dl = os.listings.find((l) => l.id === dates.id);
 check(dl.available === 2 && dl.expiry === soon, "stock and expiry are up to date for the owner (2 dates left, expiring in 10 days)");
 check(os.invoices.some((i) => i.contractId === c.id), "the owner sees the rent schedule for the contract");
@@ -60,7 +60,7 @@ check(os.invoices.some((i) => i.contractId === c.id), "the owner sees the rent s
 // Shelf suspension by the owner.
 check((await other.act("setShelfSuspended", tokenId, true, "x")).ok === false, "another account can't suspend the shelf");
 check((await owner.act("setShelfSuspended", tokenId, true, "Labels missing on the dates")).ok, "the owner suspends the shelf");
-check((await shopper.act("authorize", soap.id, 1, false)).ok === false, "a suspended shelf can't sell");
+check((await owner.act("recordTillSale", soap.id, 1)).ok === false, "a suspended shelf can't sell");
 check((await maker.state()).notifications.some((n) => n.title === "Shelf suspended"), "the maker is told");
 check((await admin.state()).audit.some((a) => a.action === "shelf.suspended" && a.actor.startsWith("Store owner")), "the audit log records the store owner, not the platform");
 check((await owner.act("setShelfSuspended", tokenId, false, "Reinstated by owner")).ok, "the owner reinstates the shelf");

@@ -21,6 +21,7 @@ import {
 } from "@/lib/selectors";
 import { daysUntil, downloadBlob, fmtDate, fmtTime, round2, toCsv, today } from "@/lib/util";
 import type { Delivery, Listing, Order, State } from "@/lib/types";
+import { InvoiceNote, OFFLINE, ReportPaid } from "@/components/money-offline";
 
 /**
  * The token holder's remote retail office. Every figure is computed from the holder's own records — shelves,
@@ -86,7 +87,7 @@ function Portal() {
         <main className="min-w-0" data-testid={`holder-sec-${sec}`}>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-2">
             <div><p className="text-sm text-muted-foreground">{meName} · token holder</p><h1 className="font-display text-3xl font-bold md:text-4xl">{NAV.find((n) => n.id === sec)?.label}</h1></div>
-            <p className="text-xs text-muted-foreground">Figures from your records on InRaf · payments simulated</p>
+            <p className="text-xs text-muted-foreground">Figures from your records on InRaf{OFFLINE ? " · payments are made directly between you and the stores" : " · payments simulated"}</p>
           </div>
           <ErrorNote error={error} />
           {sec === "business" && <Business st={st} d={d} go={setSec} />}
@@ -465,7 +466,7 @@ function Sales({ st, d, act, pending }: { st: State; d: B; act: Act; pending: bo
       {issue && <Card><p className="font-display text-lg font-bold">Report a problem with {issue.ref}</p><div className="mt-3"><NewCase st={st} tokens={tokens} act={act} pending={pending} kind="incident" preset={{ tokenId: issue.tokenId, type: "wrong-attribution", orderId: issue.id, listingId: issue.listingId, description: `${issue.ref}: ` }} onDone={() => setIssue(null)} /></div></Card>}
       <Card className="overflow-x-auto p-0">
         <p className="p-3 font-semibold">Transactions</p>
-        {d.orders.length === 0 ? <p className="px-3 pb-4 text-sm text-muted-foreground">No orders yet. They appear when a shopper buys from your shelf's QR catalogue.</p> : (
+        {d.orders.length === 0 ? <p className="px-3 pb-4 text-sm text-muted-foreground">{OFFLINE ? "No sales yet. They appear as soon as the store records a sale of your products at its till." : "No orders yet. They appear when a shopper buys from your shelf's QR catalogue."}</p> : (
           <table className="w-full min-w-[1080px] text-left text-sm" data-testid="table-transactions">
             <thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="p-3">Order</th><th className="p-3">Store · shelf</th><th className="p-3">Product</th><th className="p-3">Qty × price</th><th className="p-3">Sale</th><th className="p-3">Commission</th><th className="p-3">Store share</th><th className="p-3">Net to you</th><th className="p-3">Payment</th><th className="p-3">Payout</th><th className="p-3" /></tr></thead>
             <tbody>{d.orders.map((o) => (
@@ -477,14 +478,14 @@ function Sales({ st, d, act, pending }: { st: State; d: B; act: Act; pending: bo
                 <td className="p-3 tabular-nums">{usd(o.subtotal)}</td><td className="p-3 tabular-nums">−{usd(o.commission)}</td>
                 <td className="p-3 tabular-nums">{o.shopShare ? `−${usd(o.shopShare)}` : "—"}</td><td className="p-3 font-semibold tabular-nums">{usd(o.net)}</td>
                 <td className="p-3"><Pill>{o.payment}</Pill>{o.refund && <p className="mt-1 text-xs">refund {o.refund.status}</p>}</td>
-                <td className="p-3"><Pill>{o.payout}</Pill>{(o.payout === "pending" || o.payout === "failed") && o.payment === "captured" && <SmallButton disabled={pending} onClick={() => act(() => actions.requestPayout(o.id, "holder"), "Payout sent to the simulated provider")} testId={`button-payout-${o.id}`}>{o.payout === "failed" ? "Retry" : "Request payout"}</SmallButton>}</td>
+                <td className="p-3"><Pill>{o.channel === "till" ? (o.payout === "settled" ? "paid by store" : o.payout === "pending" ? "due from store" : o.payout) : o.payout}</Pill>{o.settlement && <p className="mt-1 text-xs text-muted-foreground">{o.settlement.method}{o.settlement.reference ? ` · ${o.settlement.reference}` : ""}</p>}{o.channel !== "till" && !OFFLINE && (o.payout === "pending" || o.payout === "failed") && o.payment === "captured" && <SmallButton disabled={pending} onClick={() => act(() => actions.requestPayout(o.id, "holder"), "Payout sent to the simulated provider")} testId={`button-payout-${o.id}`}>{o.payout === "failed" ? "Retry" : "Request payout"}</SmallButton>}</td>
                 <td className="p-3"><button type="button" onClick={() => setIssue(o)} className="text-xs text-primary underline" data-testid={`report-order-${o.id}`}>Report a problem</button></td>
               </tr>
             ))}</tbody>
           </table>
         )}
       </Card>
-      <p className="text-xs text-muted-foreground">Sales are recorded when a shopper pays by scanning your shelf's QR code. Sales rung up on a store's own till aren't connected yet; there are no discounts on QR sales today, so the price shown is the price paid.</p>
+      <p className="text-xs text-muted-foreground">{OFFLINE ? "Shoppers pay at the store's till and the store records each sale here, at the price you set. The store pays you your part each month and records it; if a sale or payment looks wrong, use “Report a problem” within 14 days." : "Sales are recorded when a shopper pays by scanning your shelf's QR code. Sales rung up on a store's own till aren't connected yet; there are no discounts on QR sales today, so the price shown is the price paid."}</p>
     </div>
   );
 }
@@ -494,7 +495,7 @@ const LEDGER_LABEL: Record<string, string> = {
   capture_gross: "Sale (incl. tax and service fee)", tax_collected: "Tax collected", platform_fee: "InRaf commission", holder_payable: "Earned by you", shop_share: "Store's share of the sale",
   payout_settled: "Payout settled", payout_failed: "Payout failed", refund_gross: "Refund to shopper", tax_reversed: "Tax reversed", platform_fee_reversed: "Commission reversed",
   holder_payable_reversed: "Earning reversed (refund)", shop_share_reversed: "Store share reversed", payout_reversed: "Payout reversed", holder_recovery: "Owed back after refund",
-  rent_paid: "Rent paid", deposit_paid: "Deposit paid", shop_payout_settled: "Store share settled", shop_recovery: "Store share owed back",
+  rent_paid: "Rent paid", deposit_paid: "Deposit paid", till_sale: "Sale at the store's till", deposit_returned: "Deposit returned", shop_payout_settled: "Store share settled", shop_recovery: "Store share owed back",
 };
 function Money({ st, d, act, pending }: { st: State; d: B; act: Act; pending: boolean }) {
   const m = d.money;
@@ -517,8 +518,8 @@ function Money({ st, d, act, pending }: { st: State; d: B; act: Act; pending: bo
       </Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Settled to you" value={usd(m.settled)} testId="text-settled" />
-        <Stat label="Waiting for payout" value={usd(m.pending)} sub="request a payout per order" />
-        <Stat label="Payout processing" value={usd(m.processing)} sub="awaiting the provider" />
+        <Stat label={OFFLINE ? "Due from stores" : "Waiting for payout"} value={usd(m.pending)} sub={OFFLINE ? "stores pay you monthly for till sales" : "request a payout per order"} />
+        {!OFFLINE && <Stat label="Payout processing" value={usd(m.processing)} sub="awaiting the provider" />}
         <Stat label="Payable balance" value={usd(m.payable)} sub={m.recovery ? `${usd(m.recovery)} owed back after refunds` : "from the ledger"} testId="text-payable" />
       </div>
       <Card>
@@ -528,7 +529,7 @@ function Money({ st, d, act, pending }: { st: State; d: B; act: Act; pending: bo
           {d.invoices.length === 0 && <li className="py-2 text-muted-foreground">No rent invoices yet.</li>}
           {d.invoices.map((i) => (
             <li key={i.id} className="flex flex-wrap items-center gap-2 py-2"><span className="flex-1">{i.label}<span className="block text-xs text-muted-foreground">{i.ref} · due {fmtDate(i.dueDate)}{i.receiptRef ? ` · receipt ${i.receiptRef}` : ""}</span></span><span className="tabular-nums">{usd(i.total)}{invoiceStatus(i) === "overdue" ? ` + ${usd(lateFeeFor(st, i))} late` : ""}</span><Pill>{invoiceStatus(i)}</Pill>
-              {invoiceStatus(i) !== "paid" && <SmallButton tone="solid" disabled={pending} onClick={() => act(() => actions.payInvoice(i.id), "Rent payment recorded (simulated)")} testId={`button-pay-${i.id}`}>Pay (simulated)</SmallButton>}</li>
+              {OFFLINE ? <ReportPaid inv={i} act={act} pending={pending} /> : invoiceStatus(i) !== "paid" && <SmallButton tone="solid" disabled={pending} onClick={() => act(() => actions.payInvoice(i.id), "Rent payment recorded (simulated)")} testId={`button-pay-${i.id}`}>Pay (simulated)</SmallButton>}{OFFLINE && <span className="w-full"><InvoiceNote inv={i} /></span>}</li>
           ))}
         </ul>
       </Card>
@@ -544,7 +545,7 @@ function Money({ st, d, act, pending }: { st: State; d: B; act: Act; pending: bo
           </table>
         )}
       </Card>
-      <p className="text-xs text-muted-foreground">Payments and payouts are simulated today: no money moves and no bank details are collected. Real payouts will need a licensed payment provider.</p>
+      <p className="text-xs text-muted-foreground">{OFFLINE ? "InRaf doesn't take or hold money: you pay rent to the store directly and the store pays you for sales. Every payment is recorded here once both sides have confirmed it." : "Payments and payouts are simulated today: no money moves and no bank details are collected. Real payouts will need a licensed payment provider."}</p>
     </div>
   );
 }
@@ -637,7 +638,7 @@ function Account({ st, me, email }: { st: State; me: ReturnType<typeof holderOf>
           <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Country</dt><dd>{me.country ? countryName(me.country) : "not set"}</dd></div>
           <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Verification</dt><dd>{me.verification === "demo-reviewed" ? "reviewed" : "not started"}</dd></div>
         </dl>
-        <p className="mt-3 text-xs text-muted-foreground">Payout and tax details aren't collected yet: payments are simulated until a licensed payment provider is connected. Sign-in is by one-time email link, so there's no password to manage.</p>
+        <p className="mt-3 text-xs text-muted-foreground">{OFFLINE ? "InRaf doesn't collect bank details: give the stores you work with the details they should pay you to, and pay them using theirs." : "Payout and tax details aren't collected yet: payments are simulated until a licensed payment provider is connected."} Sign-in is by one-time email link, so there's no password to manage.</p>
       </Card>
       <Card>
         <div className="flex items-center justify-between"><p className="font-display text-lg font-bold">Notifications</p><Link href="/notifications" className="text-sm text-primary underline">All</Link></div>

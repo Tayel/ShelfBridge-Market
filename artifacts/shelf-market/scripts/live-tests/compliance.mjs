@@ -26,8 +26,8 @@ await admin.act("approveContract", c.id, "x"); await owner.act("sign", c.id, "ow
 const tokenId = (await maker.act("sign", c.id, "holder", "Maker", false)).state.contracts.find((x) => x.id === c.id).tokenId;
 const soap = await maker.act("createListing", tokenId, { name: "Freeze soap", sku: "FZ-1", category: "beauty", description: "x", color: "#5E8C61", origin: "AE", retail: 5, cost: 2, taxRate: 5, batch: "B1", initialQty: 20 });
 await owner.act("decideListing", soap.id, true, ""); await maker.act("activateListing", soap.id);
-const o1 = await shopper.act("authorize", soap.id, 2, false); await shopper.act("capture", o1.id);
-check(o1.ok, "before any freeze a shopper can buy the maker's product");
+const o1 = await owner.act("recordTillSale", soap.id, 2);
+check(o1.ok, "before any freeze the store can sell the maker's product");
 
 // ---------- data rights ----------
 const anon = await stranger.req("POST", "/api/privacy/requests", { kind: "access", name: "Visitor", email: `dsr-${RUN}@inraf.test`, details: "", confirm: true });
@@ -69,9 +69,9 @@ check(!msJson.includes("Sanctions name match") && !msJson.includes("account.froz
 check(ms.listings.find((l) => l.id === soap.id)?.status === "active", "the maker's own view still shows the product as live");
 const tried = await maker.act("restockListing", soap.id, 5);
 check(tried.ok === false && /try again later/.test(tried.error) && !/frozen|compliance|suspend/i.test(tried.error), "the maker's actions fail with a neutral message");
-check((await maker.act("requestPayout", o1.id)).ok === false, "the maker can't request a payout");
+check((await maker.act("reportInvoicePaid", "x", { paidOn: "2026-01-01", method: "Cash" })).ok === false, "the maker can't record payments");
 check(!(await shopper.state()).listings.some((l) => l.id === soap.id), "shoppers no longer see the product");
-check((await shopper.act("authorize", soap.id, 1, false)).ok === false, "and can't buy it directly");
+check((await owner.act("recordTillSale", soap.id, 1)).ok === false, "and the store can't ring it up");
 check((await owner.state()).listings.some((l) => l.id === soap.id), "the store owner still sees the product on their shelf");
 const audit = (await admin.state()).audit;
 check(audit.some((a) => a.action === "account.frozen" && a.detail === "Sanctions name match under review"), "the freeze and reason are in the audit log");

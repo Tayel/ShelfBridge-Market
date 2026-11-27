@@ -117,7 +117,7 @@ export default function ShelfPage() {
         </div>
       </div>
 
-      <Modal open={!!restock} onClose={() => setRestock(null)} title="Restock (simulated)">
+      <Modal open={!!restock} onClose={() => setRestock(null)} title="Restock">
         <Field label="Units to add" hint={`Free capacity: ${Math.max(0, shop.shelf.capacity - used)} units`}><input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className={inputCls} data-testid="input-restock" /></Field>
         <div className="mt-3"><ErrorNote error={error} /></div>
         <SmallButton tone="solid" disabled={pending} onClick={async () => { if (restock) { const r = await act(() => actions.restockListing(restock, qty), "Restocked"); if (r.ok) setRestock(null); } }} testId="button-confirm-restock">Add units</SmallButton>

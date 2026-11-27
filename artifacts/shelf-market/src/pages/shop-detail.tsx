@@ -103,7 +103,7 @@ export default function ShopDetail() {
     catch { toast({ title: "Couldn't copy the link", description: window.location.href }); }
   };
   const sendReport = async () => {
-    const r = await act(() => actions.reportShop(shop.id, reason), "Report sent to the platform (simulated)");
+    const r = await act(() => actions.reportShop(shop.id, reason), "Report sent to InRaf");
     if (r.ok) { setReport(false); setReason(""); }
   };
 
@@ -376,7 +376,7 @@ export default function ShopDetail() {
       </Modal>
 
       <Modal open={report} onClose={() => setReport(false)} title="Report this listing">
-        <Field label="What's wrong?" hint="Goes to the platform admin queue (simulated).">
+        <Field label="What's wrong?" hint="Goes to the InRaf team, who review every report.">
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className={inputCls} placeholder="e.g. photos don't match the shop, asked to pay off-platform" data-testid="input-report-reason" />
         </Field>
         <div className="mt-3"><ErrorNote error={error} /></div>

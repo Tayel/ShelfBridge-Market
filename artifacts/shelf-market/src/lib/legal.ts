@@ -18,5 +18,5 @@ export const COMPANY = {
 };
 
 /** Bump when the Terms or Privacy Policy change in substance: people agree again at their next sign-in. */
-export const TERMS_VERSION = "2026-11-26.2";
-export const TERMS_UPDATED = "26 November 2026";
+export const TERMS_VERSION = "2026-11-27.1";
+export const TERMS_UPDATED = "27 November 2026";

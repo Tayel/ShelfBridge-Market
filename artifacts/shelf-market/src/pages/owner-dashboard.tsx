@@ -11,6 +11,7 @@ import { actions } from "@/lib/actions";
 import { useAct } from "@/hooks/use-act";
 import { holderOf } from "@/lib/ops";
 import { CaseCard, DeliveryCard } from "@/components/store-ops";
+import { ConfirmPaid, InvoiceNote, MakerSettlements, OFFLINE, ReturnDeposit, TillRefund, TillSale } from "@/components/money-offline";
 import { offerExpired, offerNeeded, caseIsOpen } from "@/lib/ops";
 import { awaitingVersion, contractStatus, executedVersion, expiresSoon, invoiceStatus, isExpired, isLowStock, lateFeeFor, shelfLabel, shopShareMoney, slotsOf } from "@/lib/selectors";
 import { daysUntil, downloadBlob, fmtDate, round2, toCsv, today } from "@/lib/util";
@@ -106,10 +107,10 @@ function Portal() {
         {tab === "overview" && <Overview st={st} d={d} setTab={setTab} />}
         {tab === "requests" && <Requests st={st} d={d} act={act} pending={pending} name={session.me?.name || session.me?.email || "Store owner"} />}
         {tab === "products" && <Products st={st} d={d} act={act} pending={pending} />}
-        {tab === "orders" && <Orders st={st} d={d} />}
+        {tab === "orders" && <Orders st={st} d={d} act={act} pending={pending} />}
         {tab === "renters" && <Renters st={st} d={d} />}
         {tab === "shelves" && <Shelves st={st} d={d} act={act} pending={pending} />}
-        {tab === "money" && <Money st={st} d={d} />}
+        {tab === "money" && <Money st={st} d={d} act={act} pending={pending} />}
         {tab === "analytics" && <Analytics d={d} />}
         {tab === "stores" && <Stores st={st} d={d} act={act} session={session} />}
       </div>
@@ -285,7 +286,7 @@ function Products({ st, d, act, pending }: { st: State; d: D; act: Act; pending:
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">{filters.map(([k, l, n]) => <button key={k} onClick={() => setF(k)} aria-pressed={f === k} className={`rounded-full border px-3 py-1.5 text-sm ${f === k ? "border-foreground bg-foreground text-background" : "border-border"}`} data-testid={`filter-products-${k}`}>{l} <span className="opacity-60">{n}</span></button>)}</div>
-      <p className="text-xs text-muted-foreground">Makers own their products and set their prices and stock. You approve what goes on your shelves; if something is unsafe or expired, suspend the shelf in the Shelves tab and the maker is told.</p>
+      <p className="text-xs text-muted-foreground">Makers own their products and set their prices and stock. You approve what goes on your shelves; if something is unsafe or expired, suspend the shelf in the Shelves tab and the maker is told.{OFFLINE ? " When a shopper pays at your till, record it with “Sold at till” so the stock and the maker's earnings stay right." : ""}</p>
       {rows.length === 0 ? <Empty title="No products here" /> : (
         <Card className="overflow-x-auto p-0">
           <table className="w-full min-w-[820px] text-left text-sm" data-testid="table-products">
@@ -302,7 +303,7 @@ function Products({ st, d, act, pending }: { st: State; d: D; act: Act; pending:
                     <td className="p-3 tabular-nums">{l.sold} / {l.returned}</td>
                     <td className="p-3 text-xs">{l.expiry ? <span className={isExpired(l) ? "font-semibold text-destructive" : expiresSoon(l) ? "text-amber-700" : ""}>{fmtDate(l.expiry)}{isExpired(l) ? " · expired" : ` · ${daysUntil(l.expiry)} days`}</span> : "—"}</td>
                     <td className="p-3"><Pill>{l.status}</Pill>{l.statusNote && <p className="mt-1 text-xs text-muted-foreground">{l.statusNote}</p>}</td>
-                    <td className="p-3">{l.status === "pending" && (
+                    <td className="p-3">{OFFLINE && <TillSale l={l} act={act} pending={pending} />}{l.status === "pending" && (
                       <div className="flex gap-1">
                         <SmallButton tone="solid" disabled={pending} onClick={() => act(() => actions.decideListing(l.id, true, ""), "Product approved")} testId={`button-approve-${l.id}`}><Check className="h-4 w-4" />Approve</SmallButton>
                         <SmallButton disabled={pending} onClick={() => { const n = window.prompt("Reason for rejection (shown to the maker)"); if (n !== null) act(() => actions.decideListing(l.id, false, n), "Product rejected"); }} testId={`button-reject-${l.id}`}><X className="h-4 w-4" />Reject</SmallButton>
@@ -320,7 +321,7 @@ function Products({ st, d, act, pending }: { st: State; d: D; act: Act; pending:
 }
 
 // ---------- orders & sales ----------
-function Orders({ st, d }: { st: State; d: D }) {
+function Orders({ st, d, act, pending }: { st: State; d: D; act: Act; pending: boolean }) {
   const [f, setF] = useState<"all" | "paid" | "refunds" | "refunded" | "other">("all");
   const rows = d.orders.filter((o) => f === "all" || (f === "paid" && paid(o)) || (f === "refunds" && o.refund?.status === "requested") || (f === "refunded" && o.payment === "refunded") || (f === "other" && ["failed", "cancelled", "authorized"].includes(o.payment)));
   const gross = round2(d.captured.reduce((a, o) => a + o.subtotal, 0));
@@ -332,14 +333,14 @@ function Orders({ st, d }: { st: State; d: D }) {
         <Stat label="Paid orders" value={String(d.captured.length)} sub={`${usd(gross)} in product sales`} testId="stat-paid-orders" />
         <Stat label="Your share of sales" value={usd(d.share.earned)} sub="only on share-of-sales or consignment contracts" />
         <Stat label="Refunded" value={String(refunded.length)} sub={usd(round2(refunded.reduce((a, o) => a + o.subtotal, 0)))} />
-        <Stat label="Refunds waiting" value={String(d.refundRequests.length)} sub="InRaf decides refunds" />
+        <Stat label="Refunds waiting" value={String(d.refundRequests.length)} sub={OFFLINE ? "you refund till sales yourself" : "InRaf decides refunds"} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {([["all", "All"], ["paid", "Paid"], ["refunds", "Refund requested"], ["refunded", "Refunded"], ["other", "Unpaid / cancelled"]] as const).map(([k, l]) => <button key={k} onClick={() => setF(k)} aria-pressed={f === k} className={`rounded-full border px-3 py-1.5 text-sm ${f === k ? "border-foreground bg-foreground text-background" : "border-border"}`} data-testid={`filter-orders-${k}`}>{l}</button>)}
         <span className="flex-1" />
         <SmallButton onClick={exportCsv} disabled={rows.length === 0} testId="button-export-orders"><Download className="h-4 w-4" />Export CSV</SmallButton>
       </div>
-      <p className="text-xs text-muted-foreground">Shoppers pay by scanning the QR on the shelf, so there's nothing for you to pack or ship: the product leaves your store with the shopper. Payments are simulated today.</p>
+      <p className="text-xs text-muted-foreground">{OFFLINE ? "Shoppers pay at your till. Record each sale in Products & stock (“Sold at till”), and record any refund you give here. The maker sees every sale and refund." : "Shoppers pay by scanning the QR on the shelf, so there's nothing for you to pack or ship: the product leaves your store with the shopper. Payments are simulated today."}</p>
       {rows.length === 0 ? <Empty title="No orders yet" text="Orders appear here as soon as a shopper buys from a shelf in your store." /> : (
         <Card className="overflow-x-auto p-0">
           <table className="w-full min-w-[760px] text-left text-sm" data-testid="table-orders">
@@ -353,7 +354,7 @@ function Orders({ st, d }: { st: State; d: D }) {
                   <td className="p-3 tabular-nums">{usd(o.subtotal)}</td>
                   <td className="p-3 tabular-nums">{o.shopShare ? `${usd(o.payment === "refunded" ? 0 : o.shopShare)} (${o.sharePct}%)` : "—"}</td>
                   <td className="p-3"><Pill>{o.payment}</Pill></td>
-                  <td className="p-3">{o.refund ? <Pill>{o.refund.status}</Pill> : "—"}</td>
+                  <td className="p-3">{o.refund ? <Pill>{o.refund.status}</Pill> : OFFLINE ? <TillRefund o={o} act={act} pending={pending} /> : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -454,7 +455,7 @@ function Shelves({ st, d, act, pending }: { st: State; d: D; act: Act; pending: 
 }
 
 // ---------- money ----------
-function Money({ st, d }: { st: State; d: D }) {
+function Money({ st, d, act, pending }: { st: State; d: D; act: Act; pending: boolean }) {
   const deposits = round2(d.invoices.filter((i) => i.kind === "deposit" && invoiceStatus(i) === "paid").reduce((a, i) => a + i.total, 0));
   const rows = d.invoices.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const exportCsv = () => downloadBlob(`inraf-rent-${today()}.csv`, toCsv(rows.map((i) => { const c = d.contracts.find((x) => x.id === i.contractId)!; return { invoice: i.ref, contract: c.ref, store: d.shopOf(c.shopId)?.name, maker: holderOf(st, c.holderId).name, label: i.label, kind: i.kind, due: i.dueDate, amount: i.amount, tax: i.tax, total: i.total, status: invoiceStatus(i), late_fee: i.lateFee ?? (invoiceStatus(i) === "overdue" ? lateFeeFor(st, i) : 0), receipt: i.receiptRef ?? "" }; })), "text/csv");
@@ -467,14 +468,15 @@ function Money({ st, d }: { st: State; d: D }) {
         <Stat label="Overdue (+ late fees)" value={usd(d.sumInv("overdue"))} />
         <Stat label="Share of sales" value={usd(d.share.earned)} sub={`${usd(d.share.settled)} settled to you`} testId="text-share-earned" />
       </div>
-      <p className="text-xs text-muted-foreground">InRaf doesn't charge you a fee on rent: its commission is taken from makers' product sales. Payments are simulated today: no money moves yet.</p>
+      {OFFLINE && <Card><MakerSettlements st={st} shopIds={d.ids} act={act} pending={pending} /></Card>}
+      <p className="text-xs text-muted-foreground">{OFFLINE ? "InRaf doesn't take or hold any money and charges no fee on rent or sales. Renters pay you directly; confirm each payment when it arrives so they get a receipt." : "InRaf doesn't charge you a fee on rent: its commission is taken from makers' product sales. Payments are simulated today: no money moves yet."}</p>
       <Card className="overflow-x-auto p-0">
         <div className="flex items-center justify-between p-3"><p className="font-semibold">Rent and deposit invoices</p><SmallButton onClick={exportCsv} disabled={rows.length === 0} testId="button-export-rent"><Download className="h-4 w-4" />Export CSV</SmallButton></div>
         {rows.length === 0 ? <p className="px-3 pb-4 text-sm text-muted-foreground">No rent schedule yet: it starts when a contract becomes active.</p> : (
           <table className="w-full min-w-[640px] text-left text-sm" data-testid="table-invoices">
             <thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="p-3">Invoice</th><th className="p-3">Maker</th><th className="p-3">Due</th><th className="p-3">Total</th><th className="p-3">Status</th></tr></thead>
             <tbody>{rows.map((i) => { const c = d.contracts.find((x) => x.id === i.contractId)!; return (
-              <tr key={i.id} className="border-t border-border"><td className="p-3"><Link href={`/contracts/${c.id}`} className="hover:underline">{c.ref} · {i.label}</Link><p className="text-xs text-muted-foreground">{i.ref}{i.receiptRef ? ` · receipt ${i.receiptRef}` : ""}</p></td><td className="p-3">{holderOf(st, c.holderId).name}</td><td className="p-3">{fmtDate(i.dueDate)}</td><td className="p-3 tabular-nums">{usd(i.total)}</td><td className="p-3"><Pill>{invoiceStatus(i)}</Pill></td></tr>
+              <tr key={i.id} className="border-t border-border"><td className="p-3"><Link href={`/contracts/${c.id}`} className="hover:underline">{c.ref} · {i.label}</Link><p className="text-xs text-muted-foreground">{i.ref}{i.receiptRef ? ` · receipt ${i.receiptRef}` : ""}</p>{OFFLINE && <InvoiceNote inv={i} />}</td><td className="p-3">{holderOf(st, c.holderId).name}</td><td className="p-3">{fmtDate(i.dueDate)}</td><td className="p-3 tabular-nums">{usd(i.total)}</td><td className="p-3"><Pill>{invoiceStatus(i)}</Pill>{OFFLINE && <div className="mt-1 flex flex-wrap gap-1"><ConfirmPaid inv={i} act={act} pending={pending} /><ReturnDeposit inv={i} ended={!!c.terminatedAt || (executedVersion(c)?.snapshot.terms.end ?? "9999") <= today()} act={act} pending={pending} /></div>}</td></tr>
             ); })}</tbody>
           </table>
         )}

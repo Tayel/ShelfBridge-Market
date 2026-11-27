@@ -58,7 +58,7 @@ check(mc.status === "completed" && mc.events.length >= 7, "only then is it compl
 check((await maker.act("caseAction", t1.id, "concern", { note: "again" })).ok === false, "a completed request can't be reopened by mistake");
 
 // ---- physical count and reconciliation ----
-const sale = await stranger.act("authorize", jam.id, 2, false); await stranger.act("capture", sale.id);
+const sale = await owner.act("recordTillSale", jam.id, 2);
 const cnt = await maker.act("openCase", { kind: "task", type: "count", tokenId: tok, description: "Monthly count please" });
 let cc = (await owner.state()).cases.find((c) => c.id === cnt.id);
 check(cc.count?.[0]?.expected === 8, "a count request knows the expected stock (10 − 2 sold = 8)");

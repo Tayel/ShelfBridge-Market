@@ -10,7 +10,8 @@ import { awaitingVersion, contractStatus, executedVersion, invoiceStatus, lateFe
 import { holderOf, offerNeeded } from "@/lib/ops";
 import { OFFER_VALIDITY_CHOICES, OFFER_VALID_DAYS, buildAgreement, longDate } from "@/lib/agreement";
 import { AcceptanceConfirmation, AgreementDocument, SharedRecord } from "@/components/agreement-view";
-import { fmtDate, fmtTime } from "@/lib/util";
+import { ConfirmPaid, InvoiceNote, OFFLINE, ReportPaid, ReturnDeposit } from "@/components/money-offline";
+import { fmtDate, fmtTime, today } from "@/lib/util";
 import { downloadContractPdf } from "@/lib/pdf";
 import type { Signature } from "@/lib/types";
 
@@ -188,16 +189,19 @@ export default function ContractPage() {
           {invoices.length > 0 && (
             <Card testId="card-rent-schedule">
               <h2 className="font-display text-xl font-bold">Rent obligations</h2>
-              <p className="text-xs text-muted-foreground">Separate from product sales. Payments are simulated; receipts are records only and no money moved.</p>
+              <p className="text-xs text-muted-foreground">{OFFLINE ? "Paid directly to the store owner (bank transfer, cash or another agreed method). The renter tells the store when it has paid; the store confirms receipt and a receipt is issued. Both sides see the same status." : "Separate from product sales. Payments are simulated; receipts are records only and no money moved."}</p>
               <ul className="mt-3 divide-y divide-border">
                 {invoices.map((i) => {
                   const s = invoiceStatus(i); const fee = lateFeeFor(st, i);
                   return (
                     <li key={i.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm" data-testid={`row-invoice-${i.id}`}>
-                      <span className="min-w-0 flex-1"><b>{i.label}</b><br /><span className="text-xs text-muted-foreground">{i.ref} · due {fmtDate(i.dueDate)}{i.receiptRef ? ` · receipt ${i.receiptRef} (${fmtDate(i.paidAt)})` : ""}</span></span>
+                      <span className="min-w-0 flex-1"><b>{i.label}</b><br /><span className="text-xs text-muted-foreground">{i.ref} · due {fmtDate(i.dueDate)}{i.receiptRef ? ` · receipt ${i.receiptRef} (${fmtDate(i.paidAt)})` : ""}</span>{OFFLINE && <InvoiceNote inv={i} />}</span>
                       <span className="tabular-nums">{usd(i.total)}{fee ? <span className="text-destructive"> +{usd(fee)}</span> : null}{i.lateFee ? <span className="text-muted-foreground"> +{usd(i.lateFee)} late</span> : null}</span>
                       <Pill>{s}</Pill>
-                      {(s === "due" || s === "overdue") && <SmallButton tone="solid" disabled={pending} onClick={() => act(() => actions.payInvoice(i.id), "Rent payment simulated")} testId={`button-pay-${i.id}`}>Simulate payment</SmallButton>}
+                      {!OFFLINE && (s === "due" || s === "overdue") && <SmallButton tone="solid" disabled={pending} onClick={() => act(() => actions.payInvoice(i.id), "Rent payment simulated")} testId={`button-pay-${i.id}`}>Simulate payment</SmallButton>}
+                      {OFFLINE && iAmHolder && <ReportPaid inv={i} act={act} pending={pending} />}
+                      {OFFLINE && iAmOwner && <ConfirmPaid inv={i} act={act} pending={pending} />}
+                      {OFFLINE && iAmOwner && <ReturnDeposit inv={i} ended={!!c.terminatedAt || (!!ex && ex.snapshot.terms.end <= today())} act={act} pending={pending} />}
                     </li>
                   );
                 })}

@@ -40,7 +40,7 @@ export default function Landing() {
           <Link key={id} href={href} data-testid={`link-secondary-${id}`} className="rounded-full border border-border px-4 py-2 text-muted-foreground transition hover:border-primary/40 hover:text-foreground">{label}</Link>
         ))}
       </div>
-      <p className="mx-auto mt-4 max-w-xl text-center text-xs text-muted-foreground">{LIVE ? "Open to shops and makers in Egypt, Portugal, Hungary, Türkiye and the UAE. Accounts and listings are real; payments, e-signatures and settlements are still simulated, so no money moves yet." : "Demo across Egypt, Portugal, Hungary, Türkiye and the UAE. Contracts, payments and settlements are simulated in this browser only."}</p>
+      <p className="mx-auto mt-4 max-w-xl text-center text-xs text-muted-foreground">{LIVE ? "Open to shops and makers in Egypt, Portugal, Hungary, Türkiye and the UAE. Stores are reviewed by InRaf before they appear. Rent is paid directly to stores and shoppers pay at the till; InRaf records every payment but never holds money." : "Demo across Egypt, Portugal, Hungary, Türkiye and the UAE. Contracts, payments and settlements are simulated in this browser only."}</p>
     </Shell>
   );
 }

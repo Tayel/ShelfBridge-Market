@@ -50,7 +50,7 @@ export function Receipt() {
         <Card testId="card-receipt">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">{LIVE ? "Receipt · payment simulated" : "Demo receipt"}</p>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">{o.channel === "till" ? "Sale paid at the store" : LIVE ? "Receipt · payment simulated" : "Demo receipt"}</p>
               <p className="font-display text-2xl font-bold" data-testid="text-order-ref">{o.ref}</p>
             </div>
             <Pill testId="status-payment">{o.payment}</Pill>
@@ -62,7 +62,7 @@ export function Receipt() {
             <div className="flex justify-between text-muted-foreground"><dt>Service fee</dt><dd className="tabular-nums">{usd(o.serviceFee)}</dd></div>
             <div className="flex justify-between border-t border-border pt-2 font-display text-lg font-bold"><dt>Total</dt><dd className="tabular-nums">{usd(o.gross)}</dd></div>
           </dl>
-          <p className="mt-3 text-xs text-muted-foreground">Simulation reference {o.simRef}. Not a provider transaction ID. No money moved.</p>
+          <p className="mt-3 text-xs text-muted-foreground">{o.channel === "till" ? `Recorded by the store · reference ${o.simRef}. Paid at the store's till.` : `Simulation reference ${o.simRef}. Not a provider transaction ID. No money moved.`}</p>
           <ol className="mt-4 space-y-1 border-t border-border pt-3 text-xs">
             {steps.filter(([, at]) => at).map(([k, at]) => <li key={k} className="flex justify-between"><span>{k}</span><span className="text-muted-foreground">{fmtTime(at)}</span></li>)}
           </ol>

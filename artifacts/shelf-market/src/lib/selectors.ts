@@ -47,10 +47,10 @@ export const isLowStock = (l: Listing) => l.status === "active" && l.available >
 export function shelfBlockReason(s: State, token: Token): string | null {
   const shop = s.shops.find((x) => x.id === token.shopId);
   if (!shop) return "Store not found";
-  if (shop.status === "suspended") return "This store is suspended by the platform (simulated admin).";
+  if (shop.status === "suspended") return "This store is suspended by InRaf.";
   if (shop.status !== "approved") return "This store is awaiting platform approval.";
   if (token.released) return "This shelf rental has ended and the shelf was released.";
-  if (token.suspended) return "This shelf is suspended by the platform (simulated admin).";
+  if (token.suspended) return "This shelf is suspended.";
   const c = contractOfToken(s, token.id);
   if (!c) return "No rental contract on file.";
   const cs = contractStatus(c);
@@ -95,7 +95,10 @@ export function shopShareMoney(s: State, shopIds: string[]) {
   const L = s.ledger.filter((e) => shopIds.includes(e.shopId));
   const sum = (t: string[]) => round2(L.filter((e) => t.includes(e.type)).reduce((a, e) => a + e.amount, 0));
   const earned = sum(["shop_share", "shop_share_reversed"]);
-  const settled = sum(["shop_payout_settled"]);
+  // On a till sale the store keeps its share straight away, so it counts as settled.
+  const tillOrders = new Set(s.orders.filter((o) => o.channel === "till" && shopIds.includes(o.shopId)).map((o) => o.id));
+  const tillKept = round2(L.filter((e) => e.orderId && tillOrders.has(e.orderId) && (e.type === "shop_share" || e.type === "shop_share_reversed")).reduce((a, e) => a + e.amount, 0));
+  const settled = round2(sum(["shop_payout_settled"]) + tillKept);
   return { earned, settled, unsettled: round2(Math.max(0, earned - settled)), recovery: round2(Math.max(0, settled - earned)) };
 }
 
@@ -106,18 +109,19 @@ export function reconcile(s: State): RecCheck[] {
     const t = (k: string) => round2(L.filter((e) => e.type === k).reduce((a, e) => a + e.amount, 0));
     const issues: string[] = [];
     const parts = round2(t("tax_collected") + t("platform_fee") + t("shop_share") + t("holder_payable"));
+    const grossIn = round2(t("capture_gross") + t("till_sale")); // online capture, or a sale paid at the store's till
     const share = round2(o.shopShare ?? 0);
-    if (round2(t("capture_gross")) !== round2(o.gross)) issues.push("captured gross differs from order");
-    if (parts !== round2(t("capture_gross"))) issues.push("gross does not split into tax + fee + shop share + net");
+    if (grossIn !== round2(o.gross)) issues.push("captured gross differs from order");
+    if (parts !== grossIn) issues.push("gross does not split into tax + fee + shop share + net");
     if (round2(t("shop_share")) !== share) issues.push("shop share differs from order");
-    if (o.payout === "settled" && round2(t("shop_payout_settled")) !== share) issues.push("shop share not settled with the payout");
+    if (o.channel !== "till" && o.payout === "settled" && round2(t("shop_payout_settled")) !== share) issues.push("shop share not settled with the payout");
     if (round2(t("holder_payable")) !== round2(o.net)) issues.push("holder payable differs from order net");
     if (L.filter((e) => e.type === "payout_settled").length > 1) issues.push("more than one settlement recorded");
     if (o.payout === "settled" && t("payout_settled") !== round2(o.net)) issues.push("settled amount differs from net");
     if (o.payout !== "settled" && t("payout_settled") !== 0 && o.payment !== "refunded") issues.push("settlement recorded without settled state");
     if (!o.stockDeducted) issues.push("stock not deducted for captured order");
     if (o.payment === "refunded") {
-      const after = round2(t("capture_gross") + t("refund_gross"));
+      const after = round2(grossIn + t("refund_gross"));
       if (after !== 0) issues.push("refund does not offset capture");
     }
     return { orderRef: o.ref, orderId: o.id, ok: issues.length === 0, note: issues.length ? issues.join("; ") : "Ledger ties to order" };

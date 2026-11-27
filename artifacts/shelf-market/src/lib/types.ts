@@ -117,7 +117,7 @@ export interface ContractVersion {
   /** The Token Holder's signature: accepting the offer. */
   holderSig?: Signature;
   /** The formal offer the Shop Owner issued to the Token Holder (absent on older versions). */
-  offer?: { no: string; issuedAt: string; validUntil: string; fingerprint: string };
+  offer?: { no: string; issuedAt: string; validUntil: string; fingerprint: string; /** agreement template edition (absent = 1) */ template?: number };
   /** The Token Holder's acceptance, and when both sides were sent their confirmation. */
   acceptance?: { name: string; at: string; fingerprint: string; confirmedAt?: string };
   status: VersionStatus;
@@ -143,6 +143,12 @@ export interface RentInvoice {
   id: string; ref: string; contractId: string; version: number; kind: "rent" | "deposit";
   label: string; amount: number; tax: number; total: number; dueDate: string;
   paidAt?: string; receiptRef?: string; voidedAt?: string; lateFee?: number;
+  /** Paid outside InRaf: how and with what reference, as confirmed by the store owner. */
+  method?: string; paymentRef?: string; lateFeeWaived?: boolean;
+  /** The renter told the store it has paid; the store owner then confirms receipt. */
+  reported?: { at: string; paidOn: string; method: string; reference: string };
+  /** Security deposit given back after the agreement ended, with itemised deductions if any. */
+  returned?: { at: string; amount: number; deductions: string; method: string; reference: string };
 }
 
 export type ListingStatus = "draft" | "pending" | "approved" | "rejected" | "active" | "inactive" | "removed";
@@ -175,6 +181,10 @@ export interface Order {
   createdAt: string; authorizedAt?: string; capturedAt?: string; failedAt?: string; cancelledAt?: string;
   payoutRequestedAt?: string; settledAt?: string; payoutFailedAt?: string; refundedAt?: string;
   stockDeducted: boolean;
+  /** "till": the shopper paid at the store and the store recorded the sale. Absent on older (online) orders. */
+  channel?: "online" | "till";
+  /** How the store paid the maker for a till sale. */
+  settlement?: { method: string; reference: string; by: string };
   /** Live mode: who placed the order (`u:<account>` or `v:<visitor>`). */
   buyerId?: string;
   refund?: { status: "requested" | "approved" | "rejected"; reason: string; requestedAt: string; decidedAt?: string; restocked?: boolean; note?: string };
@@ -185,7 +195,7 @@ export type LedgerType =
   | "capture_gross" | "tax_collected" | "platform_fee" | "holder_payable"
   | "payout_initiated" | "payout_settled" | "payout_failed"
   | "refund_gross" | "tax_reversed" | "platform_fee_reversed" | "holder_payable_reversed" | "payout_reversed" | "holder_recovery"
-  | "rent_paid" | "deposit_paid"
+  | "rent_paid" | "deposit_paid" | "deposit_returned" | "till_sale"
   | "shop_share" | "shop_share_reversed" | "shop_payout_settled" | "shop_recovery";
 
 export interface LedgerEntry {

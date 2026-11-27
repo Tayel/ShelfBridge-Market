@@ -52,13 +52,12 @@ function LiveGuide() {
           </ul>
         </Card>
         <Card className="border-amber-500/30">
-          <p className="font-display text-xl font-bold">Still simulated</p>
+          <p className="font-display text-xl font-bold">Good to know</p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-            <li><b>No money moves yet.</b> Rent, sales, refunds and payouts are recorded, but no card is charged and nothing is paid out. References starting “SIMULATED-” are not payment IDs.</li>
-            <li><b>Signatures.</b> Typed names record agreement on InRaf but are not certified electronic signatures. Contract wording is a template.</li>
-            <li><b>Tax and fees.</b> Percentages are illustrative, not tax or legal advice for any country.</li>
+            <li><b>Money is paid directly.</b> Makers pay rent and deposits to the store owner, who confirms receipt on InRaf. Shoppers pay at the store's till; the store records each sale and pays the maker monthly. InRaf records every step but never holds money, and charges no commission while payments work this way.</li>
+            <li><b>Signatures.</b> The store owner issues a formal offer and the maker accepts it by typing their name; InRaf records the time and a fingerprint of the text. In some countries a certified electronic or paper signature may also be needed.</li>
+            <li><b>Tax.</b> Tax rates shown are a guide; each side is responsible for its own taxes.</li>
             <li><b>Tokens</b> are a record of the right to use a shelf, not crypto or an investment.</li>
-            <li><b>Sample stores</b> are shown as examples and can't be rented. Their reviews and ratings are made up.</li>
           </ul>
         </Card>
         <p className="text-center text-sm text-muted-foreground">Questions? <Link href="/support" className="text-primary underline">Help & refunds</Link></p>

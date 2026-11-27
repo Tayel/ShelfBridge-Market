@@ -71,7 +71,8 @@ check((await other.act("updateShop", shopId, { price: 1 })).ok === false, "anoth
 const shopView = (await maker.state()).state.shops.find((s) => s.id === shopId);
 check(shopView && shopView.registration === "", "approved store is public, registration number hidden");
 
-const sample = (await maker.state()).state.shops.find((s) => s.seeded && s.status === "approved");
+check(!(await maker.state()).state.shops.some((s) => s.seeded), "sample stores aren't shown to customers");
+const sample = (await admin.state()).state.shops.find((s) => s.seeded && s.status === "approved");
 const start = new Date(Date.now() + 86400e3).toISOString().slice(0, 10);
 check((await maker.act("requestContract", { shopId: sample.id, slot: 0, holderId: "h-you", start })).ok === false, "sample stores can't be rented live");
 check((await owner.act("requestContract", { shopId, slot: 0, holderId: "x", start })).ok === false, "owner can't rent in their own store");
@@ -105,14 +106,14 @@ const act = await maker.act("activateListing", lst.id);
 check(act.ok, `maker puts it on sale (${act.error ?? "ok"})`);
 
 check((await shopper.state()).state.listings.some((l) => l.id === lst.id), "the product on sale is visible to an anonymous shopper");
-const order = await shopper.act("authorize", lst.id, 2, false);
-check(order.ok, `anonymous shopper checks out (${order.error ?? order.id})`);
-check((await other.act("capture", order.id)).ok === false, "someone else can't complete the shopper's order");
-const cap = await shopper.act("capture", order.id);
-check(cap.ok, `shopper's simulated payment is captured (${cap.error ?? "ok"})`);
-check(cap.state.orders.some((o) => o.id === order.id), "shopper sees their own order");
+const online = await shopper.act("authorize", lst.id, 2, false);
+check(online.ok === false && /till/.test(online.error), "online checkout is closed: shoppers pay at the store's till");
+check((await other.act("recordTillSale", lst.id, 2)).ok === false, "only the store can record a till sale");
+check((await maker.act("recordTillSale", lst.id, 2)).ok === false, "the maker can't record sales for the store");
+const order = await owner.act("recordTillSale", lst.id, 2);
+check(order.ok, `the store records a till sale (${order.error ?? order.id})`);
 check(!(await other.state()).state.orders.some((o) => o.id === order.id), "others can't see the order");
-check((await maker.state()).state.notifications.some((n) => n.title === "New sale"), "maker is told about the sale");
+check((await maker.state()).state.notifications.some((n) => n.title === "Sale at the store"), "maker is told about the sale");
 check((await owner.state()).state.audit.length === 0 && (await admin.state()).state.audit.length > 0, "audit log is admin-only");
 
 const term = await maker.act("terminate", contractId, "Moving to another city");

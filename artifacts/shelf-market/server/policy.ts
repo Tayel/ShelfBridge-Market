@@ -8,6 +8,7 @@ import * as ops from "../src/lib/ops";
 import type { Holder, Role, State } from "../src/lib/types";
 import { HttpError } from "./db";
 import { type Me, userIdOfHolder } from "./auth";
+import { ONLINE_PAYMENTS } from "../src/lib/payments";
 
 export interface Actor { me: Me | null; /** `u:<account>` when signed in, else `v:<visitor>` */ principal: string; /** accounts the MLRO has frozen */ frozen?: Set<string> }
 
@@ -168,10 +169,20 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
       break;
     }
     case "payInvoice": {
+      if (!ONLINE_PAYMENTS) throw new ops.DemoError("Rent is paid directly to the store owner. Use “I've paid” to tell them, and they confirm it here.");
       const inv = find(s.invoices, str(a0, "invoice"), "Invoice");
       const c = find(s.contracts, inv.contractId, "Contract");
       need(isHolder(c.holderId, signedIn(actor)), "Only the shelf holder pays this invoice.");
       run(() => ops.payInvoice(s, inv.id));
+      break;
+    }
+    case "reportInvoicePaid": case "confirmInvoicePaid": case "returnDeposit": {
+      const m = signedIn(actor);
+      const inv = find(s.invoices, str(a0, "invoice"), "Invoice");
+      const c = find(s.contracts, inv.contractId, "Contract");
+      const a = (args[1] ?? {}) as Record<string, unknown>;
+      if (name === "reportInvoicePaid") { need(isHolder(c.holderId, m), "Only the renter can report paying this invoice."); run(() => ops.reportInvoicePaid(s, inv.id, a as Parameters<typeof ops.reportInvoicePaid>[2])); }
+      else { need(ownsShop(s, c.shopId, m), "Only the store owner, who receives the money, can confirm this."); if (name === "confirmInvoicePaid") run(() => ops.confirmInvoicePaid(s, inv.id, a as Parameters<typeof ops.confirmInvoicePaid>[2])); else run(() => ops.returnDeposit(s, inv.id, a as Parameters<typeof ops.returnDeposit>[2])); }
       break;
     }
     case "setShelfSuspended": {
@@ -249,7 +260,30 @@ export function applyAction(s: State, name: string, rawArgs: unknown, actor: Act
     }
 
     // ---------- shopping (payments are simulated) ----------
+    case "recordTillSale": {
+      const l = find(s.listings, str(a0, "product"), "Product");
+      need(ownsShop(s, l.shopId, signedIn(actor)), "Only the store selling it can record a till sale.");
+      const hu = userIdOfHolder(l.holderId);
+      if (hu && actor.frozen?.has(hu)) throw new ops.DemoError("This product isn't available right now.");
+      run(() => ops.recordTillSale(s, l.id, Number(args[1])));
+      break;
+    }
+    case "recordTillRefund": {
+      const o = find(s.orders, str(a0, "order"), "Order");
+      need(ownsShop(s, o.shopId, signedIn(actor)), "Only the store that made the sale can refund it.");
+      run(() => ops.recordTillRefund(s, o.id, !!args[1], String(args[2] ?? "")));
+      break;
+    }
+    case "settleWithMaker": {
+      const m = signedIn(actor);
+      const t = find(s.tokens, str(a0, "shelf"), "Shelf");
+      need(ownsShop(s, t.shopId, m), "Only the store owner records paying the maker.");
+      const a = (args[1] ?? {}) as { method?: string; reference?: string };
+      run(() => { ops.settleWithMaker(s, t.id, { method: String(a.method ?? ""), reference: a.reference, by: m.name || m.email }); });
+      break;
+    }
     case "authorize": {
+      if (!ONLINE_PAYMENTS) throw new ops.DemoError("Online checkout isn't open yet. Pay for this product at the store's till.");
       const l = find(s.listings, str(a0, "product"), "Product");
       const holderUser = userIdOfHolder(l.holderId), ownerUser = s.shops.find((x) => x.id === l.shopId)?.ownerUserId;
       if ((holderUser && actor.frozen?.has(holderUser)) || (ownerUser && actor.frozen?.has(ownerUser))) throw new ops.DemoError("This product isn't available right now.");
